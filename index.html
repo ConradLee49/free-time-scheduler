@@ -698,23 +698,42 @@ $('viewSeg').addEventListener('click', e=>{
   const b = e.target.closest('button'); if(!b) return;
   MODE = b.dataset.v; syncSeg(); renderAll();
 });
-$('grid').addEventListener('click', e=>{
-  const cell = e.target.closest('.slot'); if(!cell) return;
-  if(MODE!=='edit') return;
+/* 提交一次格子切换（填写用） */
+function toggleSlot(d,h){
   const a = active();
   if(!a){ toast('请先点击上方填写者头像设为“正在填写”','warn'); return; }
-  const d = +cell.dataset.d, h = +cell.dataset.h, k = keyOf(d,h);
+  const k = keyOf(d,h);
   const obj = S.data[a.id] || (S.data[a.id]={});
   if(obj[k]) delete obj[k]; else obj[k] = true;
   changed([a.id]); persist();
-  // 只刷新被点的格子 + 轻量信息，避免整表重绘（否则快速连点第二段会丢/卡顿）
+  // 只刷新被点的格子 + 轻量信息（不再整表重绘）
   paintCell(d,h);
   renderStats();
   renderPeople();
   renderModeMeta();
   renderLegend();
   renderBannerAndSummary();
+}
+/* 用 pointer 事件代替 click：
+   click 要求“按下/抬起”在同一 DOM 节点，期间任何重绘替换节点都会丢点击；
+   pointer 用“坐标命中”判断，即使格子被重建也能稳定切换。 */
+let pdrag = null;
+$('grid').addEventListener('pointerdown', e=>{
+  if(MODE!=='edit') return;
+  if(e.pointerType==='mouse' && e.button!==0) return;
+  const cell = e.target.closest && e.target.closest('.slot.clickable');
+  if(!cell || !active()) return;
+  pdrag = { pid:e.pointerId, d:+cell.dataset.d, h:+cell.dataset.h, x:e.clientX, y:e.clientY };
 });
+document.addEventListener('pointerup', e=>{
+  if(!pdrag || e.pointerId!==pdrag.pid) return;
+  const g = pdrag; pdrag = null;
+  if(Math.hypot(e.clientX-g.x, e.clientY-g.y) > 12) return;   // 位移过大=滚动/拖拽，不算点击
+  const top = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = top && top.closest ? top.closest('.slot.clickable') : null;
+  if(cell && +cell.dataset.d===g.d && +cell.dataset.h===g.h) toggleSlot(g.d, g.h);
+});
+document.addEventListener('pointercancel', ()=>{ pdrag = null; });
 ['pairA','pairB'].forEach(id=>{
   $(id).addEventListener('change', ()=>{ if(MODE==='pair') renderMode(); });
 });
