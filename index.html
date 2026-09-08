@@ -81,7 +81,7 @@ button,input,select{font:inherit}.wrap{max-width:1400px;margin:auto;padding:22px
 .day-col:nth-child(n){background:repeating-linear-gradient(to bottom,transparent 0 41px,#f2f5fa 41px 42px)}
 body[data-wkend="1"] .slot.weekend{background:repeating-linear-gradient(to bottom,transparent 0 41px,#f7f1ea 41px 42px)}
 /* 可点击（填写模式） */
-.slot.clickable{cursor:pointer}
+.slot.clickable{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
 .slot.clickable:hover{box-shadow:inset 0 0 0 2px #b6c4e6;z-index:2}
 /* 填写者已选（含自己的颜色） */
 .slot.free-active{background:var(--dot);box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
@@ -461,6 +461,11 @@ function renderGrid(){
     for(let d=0;d<7;d++) g.innerHTML += cellHTML(d,h);
   }
 }
+/* 只重绘单个格子：避免整表重建导致快速连点丢点击/卡顿 */
+function paintCell(d,h){
+  const el = document.querySelector('#grid .slot[data-d="'+d+'"][data-h="'+h+'"]');
+  if(el) el.outerHTML = cellHTML(d,h);
+}
 
 /* ---------- 面板文案 / 图例 / 摘要 ---------- */
 function fmtBlock(dayIdx, startH, endH){
@@ -487,8 +492,8 @@ function summaryHTML(blocks){
 }
 function bannerHTML(txt, kind){ return '<div class="banner '+kind+'">'+txt+'</div>'; }
 
-function renderMode(){
-  // 段按钮
+function renderModeMeta(){
+  // 段按钮 / 状态条 / 标题等（不重绘整张课表，供轻量刷新用）
   document.querySelectorAll('#viewSeg button').forEach(b=> b.classList.toggle('active', b.dataset.v===MODE));
   const a = active();
 
@@ -540,6 +545,12 @@ function renderMode(){
     $('pairPick').hidden = false;
   }
 
+  renderGrid();
+  renderLegend();
+  renderBannerAndSummary();
+}
+function renderMode(){
+  renderModeMeta();
   renderGrid();
   renderLegend();
   renderBannerAndSummary();
@@ -687,7 +698,14 @@ $('grid').addEventListener('click', e=>{
   const d = +cell.dataset.d, h = +cell.dataset.h, k = keyOf(d,h);
   const obj = S.data[a.id] || (S.data[a.id]={});
   if(obj[k]) delete obj[k]; else obj[k] = true;
-  changed([a.id]); persist(); renderAll();
+  changed([a.id]); persist();
+  // 只刷新被点的格子 + 轻量信息，避免整表重绘（否则快速连点第二段会丢/卡顿）
+  paintCell(d,h);
+  renderStats();
+  renderPeople();
+  renderModeMeta();
+  renderLegend();
+  renderBannerAndSummary();
 });
 ['pairA','pairB'].forEach(id=>{
   $(id).addEventListener('change', ()=>{ if(MODE==='pair') renderMode(); });
