@@ -1,0 +1,6 @@
+# 运行期生成的数据（房间数据），勿提交/勿上传
+server_data.json
+server_data.json.tmp
+__pycache__/
+*.pyc
+.DS_Store

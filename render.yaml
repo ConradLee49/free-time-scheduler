@@ -1,0 +1,12 @@
+# Render Blueprint — 一键部署（免费）
+# 用法：在 Render Dashboard 用 "New + → Blueprint" 关联本仓库即可，
+#       或手动 New Web Service 选择本仓库。
+services:
+  - type: web
+    name: free-time-scheduler
+    runtime: python
+    plan: free
+    buildCommand: ""
+    startCommand: python server.py --port $PORT
+    healthCheckPath: /
+    autoDeploy: true

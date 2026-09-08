@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light" />
+<title>空闲时间协调器 · 课程表视图</title>
+<style>
+:root{
+  --bg:#f4f7fb;--panel:#ffffff;--panel2:#f8fafc;--ink:#172033;--muted:#687386;
+  --line:#e3e9f2;--navy:#152748;--navy2:#263e6c;--blue:#4066d5;--blueSoft:#edf2ff;
+  --green:#198b72;--greenSoft:#e6f5ef;--amber:#d97b29;--amberSoft:#fdf1e2;
+  --shadow:0 12px 34px rgba(26,45,82,.08);--radius:18px;
+}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",Arial,sans-serif;font-size:14px}
+button,input,select{font:inherit}.wrap{max-width:1400px;margin:auto;padding:22px 26px 56px}
+/* ---------- Hero ---------- */
+.hero{position:relative;overflow:hidden;background:linear-gradient(125deg,var(--navy),#1c3562 62%,#325591);color:#fff;border-radius:24px;padding:28px 32px 24px;box-shadow:0 20px 50px rgba(20,39,72,.18)}
+.hero:after{content:"";position:absolute;width:400px;height:400px;border-radius:50%;right:-140px;top:-240px;border:64px solid rgba(255,255,255,.055)}
+.hero-top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;position:relative;z-index:1}
+.eyebrow{font-size:12px;letter-spacing:.16em;opacity:.68;font-weight:700}
+.hero h1{font-size:28px;line-height:1.2;margin:8px 0 8px}.hero p{margin:0;opacity:.74;max-width:720px;line-height:1.75}
+.hero-actions{display:flex;gap:9px;position:relative;z-index:1;flex-wrap:wrap}
+.mini-btn{border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.1);color:#fff;padding:8px 13px;border-radius:10px;cursor:pointer;font-weight:650;white-space:nowrap;font-size:13px}
+.mini-btn:hover{background:rgba(255,255,255,.18)}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:10px;margin-top:20px;max-width:820px;position:relative;z-index:1}
+.stat{background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px 15px}.stat strong{display:block;font-size:21px;font-variant-numeric:tabular-nums}.stat span{font-size:11.5px;opacity:.7}
+/* ---------- 成员条 ---------- */
+.people-panel{background:rgba(255,255,255,.96);border:1px solid rgba(225,232,243,.95);border-radius:20px;box-shadow:var(--shadow);padding:15px 16px;margin:18px 0 14px}
+.people-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.people-head .t{font-weight:800;font-size:15px}
+.people-head .t small{color:var(--muted);font-weight:400;font-size:11.5px;margin-left:8px}
+.add-form{display:flex;gap:8px;align-items:center}
+.add-form input{border:1px solid var(--line);border-radius:10px;height:36px;padding:0 12px;outline:none;background:#fff;width:170px}
+.add-form input:focus{border-color:#9db0ec;box-shadow:0 0 0 3px #eef2ff}
+.add-form button{border:0;background:var(--navy);color:#fff;border-radius:10px;height:36px;padding:0 16px;cursor:pointer;font-weight:700}
+.add-form button:hover{background:#1c3562}
+.people-list{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}
+.person-chip{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:6px 6px 6px 12px;cursor:pointer;transition:.14s;max-width:100%}
+.person-chip:hover{border-color:#b6c4e6}
+.person-chip.active{box-shadow:0 0 0 2px var(--dot);border-color:var(--dot)}
+.person-chip .pdot{width:13px;height:13px;border-radius:50%;background:var(--dot);flex:none}
+.person-chip .pname{font-weight:700;color:#26304a;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.person-chip .phours{font-size:11px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.person-chip .phours.ok{color:var(--green);font-weight:700}
+.person-chip .phours.warn{color:#c0392b;font-weight:700}
+.chip-acts{display:flex;align-items:center;gap:2px}
+.chip-act{border:0;background:#f1f4f9;border-radius:7px;width:23px;height:23px;cursor:pointer;color:#5f6c82;font-size:12px;line-height:1;padding:0}
+.chip-act:hover{background:#e3e9f3;color:#26304a}
+.chip-act.del:hover{background:#fbe9e7;color:#c0392b}
+.editing-tag{font-size:10.5px;font-weight:800;color:#fff;border-radius:999px;padding:2px 8px;letter-spacing:.03em}
+/* ---------- 控制条 ---------- */
+.ctrl-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 12px}
+.viewseg{display:flex;background:#eef1f7;border-radius:11px;padding:4px;gap:3px}
+.viewseg button{border:0;background:transparent;color:#667188;border-radius:8px;padding:8px 15px;cursor:pointer;font-weight:650;white-space:nowrap}
+.viewseg button.active{background:#fff;color:#264688;box-shadow:0 2px 8px rgba(30,51,88,.09)}
+.status-strip{flex:1;min-width:230px;text-align:right;font-size:12.5px;color:#4b5870;line-height:1.6}
+.status-strip b{color:var(--green)}
+.status-strip .jump{cursor:pointer;text-decoration:underline;color:var(--blue)}
+/* ---------- 主面板 ---------- */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 5px 20px rgba(28,45,77,.035);padding:16px}
+.panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:11px}
+.panel-title{font-weight:800;font-size:16px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.panel-title span{color:var(--blue)}
+.panel-sub{color:var(--muted);font-size:12px;margin-top:3px;line-height:1.6}
+.pair-pick{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pair-pick select{border:1px solid var(--line);background:#fff;border-radius:10px;height:36px;padding:0 10px;color:#2f3d56;outline:none;cursor:pointer;font-weight:650}
+.pair-pick .vs{color:#8a95a8;font-weight:700}
+/* ---------- 课表网格 ---------- */
+.tt-grid-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px;background:#fff}
+.tg{display:grid;grid-template-columns:58px repeat(7,minmax(108px,1fr));grid-template-rows:40px repeat(16,42px);min-width:860px}
+.t-corner{border-bottom:1px solid var(--line);border-right:1px solid var(--line);background:#f7f9fc;color:#6c788d;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.t-day{border-bottom:1px solid var(--line);border-right:1px solid var(--line);background:#f7f9fc;color:#40506a;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:5px;position:relative}
+.t-day .chk{font-size:10px;color:#b7c0cf}
+.t-day.sat,.t-day.sun{background:#f8f1e9;color:#8a6a3e}
+.times-col{border-right:1px solid var(--line);background:#fbfcfe}
+.time-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#7c889b;font-size:10px;border-bottom:1px solid #eef2f7}
+.time-cell b{font-size:11.5px;color:#59667c;font-variant-numeric:tabular-nums}
+.slot{position:relative;border-bottom:1px solid #eef2f7;border-right:1px solid var(--line);display:flex;align-items:center;justify-content:center;transition:background .1s}
+.day-col:nth-child(n){background:repeating-linear-gradient(to bottom,transparent 0 41px,#f2f5fa 41px 42px)}
+body[data-wkend="1"] .slot.weekend{background:repeating-linear-gradient(to bottom,transparent 0 41px,#f7f1ea 41px 42px)}
+/* 可点击（填写模式） */
+.slot.clickable{cursor:pointer}
+.slot.clickable:hover{box-shadow:inset 0 0 0 2px #b6c4e6;z-index:2}
+/* 填写者已选（含自己的颜色） */
+.slot.free-active{background:var(--dot);box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
+.slot.free-active::after{content:"";position:absolute;inset:5px;border:1px solid rgba(255,255,255,.5);border-radius:6px;opacity:.0}
+/* 全员交集高亮 */
+.slot.all-free{background:var(--green);box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}
+.slot.all-free b{color:#fff;font-size:15px}
+/* 两人对比三态 */
+.slot.a-only{background:var(--aSoft)}
+.slot.b-only{background:var(--bSoft)}
+.slot.both{background:#325591}
+.slot.both b{color:#fff;font-size:15px}
+.slot .lbl{position:absolute;left:4px;top:2px;font-size:9px;font-weight:800;opacity:.75;color:#fff}
+/* ---------- 图例 / 摘要 ---------- */
+.legend{display:flex;gap:16px;margin-top:11px;color:#7c889b;font-size:11.5px;flex-wrap:wrap;align-items:center}
+.lchip{display:inline-flex;align-items:center;gap:6px}
+.lchip i{width:20px;height:12px;border-radius:4px;display:inline-block}
+.banner{margin-top:12px;padding:11px 14px;border-radius:12px;font-size:13px;line-height:1.7}
+.banner.info{background:var(--blueSoft);color:#2c4b92;border:1px solid #d7e2ff}
+.banner.ok{background:var(--greenSoft);color:#11634f;border:1px solid #c9e8dc}
+.banner.warn{background:var(--amberSoft);color:#7a5314;border:1px solid #f0ddbb}
+.banner.danger{background:#fdf2f0;color:#8f3a2c;border:1px solid #f3d2cc}
+.summary-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.sum-block{display:flex;align-items:center;gap:8px;background:#f4f7fc;border:1px solid var(--line);border-radius:11px;padding:7px 12px;font-size:12.5px}
+.sum-block .sd{font-weight:800;color:#26304a}
+.sum-block .st{font-variant-numeric:tabular-nums;color:#4066d5;font-weight:700}
+.empty-hint{padding:46px 16px;text-align:center;color:#8b96a7}.empty-hint b{display:block;color:#46536a;font-size:16px;margin-bottom:6px}
+.note{margin-top:12px;font-size:11px;color:#8b96a8;line-height:1.7}
+/* ---------- 弹层 ---------- */
+.modal-mask{position:fixed;inset:0;background:rgba(15,26,48,.3);z-index:60;display:none;align-items:center;justify-content:center;padding:18px}
+.modal-mask.open{display:flex}
+.modal{background:#fff;border-radius:18px;padding:20px;width:min(460px,100%);box-shadow:0 24px 60px rgba(15,26,48,.3)}
+.modal h3{margin:0 0 8px;font-size:17px}.modal p{color:#5a6780;font-size:13px;line-height:1.7;margin:6px 0 14px}
+.modal textarea{width:100%;height:150px;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;resize:vertical;outline:none}
+.modal-acts{display:flex;gap:9px;justify-content:flex-end;margin-top:14px}
+.modal-acts button{border:0;border-radius:10px;padding:9px 16px;cursor:pointer;font-weight:700}
+.modal-acts .ghost{background:#f1f4f9;color:#4b5870}.modal-acts .primary{background:var(--navy);color:#fff}
+.modal-acts .primary:hover{background:#1c3562}.modal-acts .danger{background:#c0392b;color:#fff}
+#toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%) translateY(16px);background:#20304e;color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;box-shadow:0 12px 30px rgba(20,35,60,.25);opacity:0;pointer-events:none;transition:.22s;z-index:99;max-width:86vw}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}#toast.warn{background:#9a3a2b}
+/* 连接状态 / 房间控制条 */
+.sync-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:0 5px 18px rgba(28,45,77,.04);padding:11px 14px;margin:14px 0}
+.sync-l{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#445067;min-width:0;flex-wrap:wrap}
+.sync-l .sync-t{font-weight:650;color:#2f3d56}
+.sync-l .hint{color:var(--muted);font-size:11.5px}
+.sync-l b{color:#3152aa}
+.live-dot{width:9px;height:9px;border-radius:50%;background:#c2cad6;flex:none}
+.live-dot.ok{background:#2eaf83;box-shadow:0 0 0 3px rgba(46,175,131,.18)}
+.live-dot.err{background:#e0564a;box-shadow:0 0 0 3px rgba(224,86,74,.16)}
+.live-dot.busy{background:#e0a622;animation:lp 1s infinite}
+@keyframes lp{0%,100%{opacity:1}50%{opacity:.25}}
+.sync-r{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sync-r input{border:1px solid var(--line);border-radius:9px;height:32px;padding:0 10px;width:140px;outline:none;background:#fff}
+.sync-r input:focus{border-color:#9db0ec;box-shadow:0 0 0 3px #eef2ff}
+.sync-r button{border:1px solid var(--line);background:#fff;border-radius:9px;height:32px;padding:0 12px;color:#4b5870;cursor:pointer;font-size:12.5px;white-space:nowrap}
+.sync-r button:hover{background:#f4f7fc}
+.sync-r button.primary{border:0;background:var(--navy);color:#fff}
+.sync-r button.primary:hover{background:#1c3562}
+@media(max-width:980px){.hero-top{flex-direction:column}.stats{grid-template-columns:repeat(2,1fr)}.status-strip{text-align:left}}
+@media(max-width:720px){.wrap{padding:12px 12px 40px}.hero{padding:20px;border-radius:18px}.hero h1{font-size:23px}.add-form input{width:130px}.viewseg button{padding:8px 11px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">FREE TIME · COORDINATOR</div>
+        <h1>空闲时间协调器</h1>
+        <p>每位填写者按小时标出自己这一周的空闲时间，系统自动求“全员交集”，也可任意两人两两对比。本地打开时数据仅存本浏览器；多人协作时，同“房间”的填写会自动汇总共享。</p>
+      </div>
+      <div class="hero-actions">
+        <button class="mini-btn" id="btnAdd">➕ 添加填写者</button>
+        <button class="mini-btn" id="btnDemo">🎲 载入示例</button>
+        <button class="mini-btn" id="btnExport">⬇️ 导出数据</button>
+        <button class="mini-btn" id="btnImport">⬆️ 导入数据</button>
+        <button class="mini-btn" id="btnReset">🗑 清空全部</button>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><strong id="stPeople">0</strong><span>填写者</span></div>
+      <div class="stat"><strong id="stFilled">0</strong><span>已填写（≥1 小时）</span></div>
+      <div class="stat"><strong id="stHours">0</strong><span>空闲标记总小时</span></div>
+      <div class="stat"><strong id="stCommon">0</strong><span>全员交集（小时）</span></div>
+    </div>
+  </section>
+
+  <!-- 成员管理 -->
+  <section class="people-panel">
+    <div class="people-head">
+      <div class="t">👥 填写者 <small>点名字设为“正在填写”，点 × 删除，✎ 改名</small></div>
+      <form class="add-form" id="addForm">
+        <input id="newName" placeholder="姓名 / 昵称，如 张三" maxlength="12" autocomplete="off" />
+        <button type="submit">添加</button>
+      </form>
+    </div>
+    <div class="people-list" id="peopleList"></div>
+  </section>
+
+  <!-- 连接状态 / 房间控制 -->
+  <section class="sync-bar">
+    <div class="sync-l">
+      <span class="live-dot" id="syncDot"></span>
+      <span class="sync-t" id="syncText">…</span>
+      <span class="hint" id="syncHint"></span>
+    </div>
+    <div class="sync-r" id="syncRt" hidden>
+      <input id="roomInput" placeholder="房间名，如 组会/宿舍" maxlength="20" autocomplete="off" />
+      <button id="roomGo">切换房间</button>
+      <button class="primary" id="copyLink">🔗 复制共享链接</button>
+      <button id="syncNow">🔄 立即同步</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="ctrl-row">
+      <div class="viewseg" id="viewSeg">
+        <button data-v="edit" class="active">✏️ 填写我的空闲</button>
+        <button data-v="all">👥 全员交集</button>
+        <button data-v="pair">🔗 两人交集</button>
+      </div>
+      <div class="status-strip" id="statusStrip"></div>
+    </div>
+
+    <div class="panel-head">
+      <div>
+        <div class="panel-title" id="panelTitle">…</div>
+        <div class="panel-sub" id="panelSub">…</div>
+      </div>
+      <div class="pair-pick" id="pairPick" hidden>
+        <select id="pairA"></select><span class="vs">∩</span><select id="pairB"></select>
+      </div>
+    </div>
+
+    <div class="tt-grid-wrap">
+      <div class="tg" id="grid"></div>
+    </div>
+
+    <div class="legend" id="legend"></div>
+    <div id="banner"></div>
+    <div class="summary-list" id="summary"></div>
+    <div class="note" id="gridNote"></div>
+  </section>
+</div>
+
+<!-- 导入弹层 -->
+<div class="modal-mask" id="importMask">
+  <div class="modal">
+    <h3>导入数据</h3>
+    <p>粘贴此前“导出数据”得到的 JSON 内容即可。导入会整体替换当前房间数据（多人协作模式下对所有人生效）。</p>
+    <textarea id="importText" placeholder='{"people":[...],"data":{...}}'></textarea>
+    <div class="modal-acts"><button class="ghost" data-close="importMask">取消</button><button class="primary" id="doImport">导入并覆盖</button></div>
+  </div>
+</div>
+<div class="modal-mask" id="resetMask">
+  <div class="modal">
+    <h3>清空全部</h3>
+    <p>将删除全部填写者及空闲标记，且不可恢复；<b>多人协作模式下会对同房间的所有人生效</b>。确认继续？</p>
+    <div class="modal-acts"><button class="ghost" data-close="resetMask">取消</button><button class="danger" id="doReset">确认清空</button></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 常量与数据模型 ================= */
+const LS_KEY = 'free-time-scheduler-v1';
+const LS_ACT = 'free-time-scheduler-active-v1';
+const DAYS   = ['周一','周二','周三','周四','周五','周六','周日'];
+const HOURS  = [];            // 08:00 ~ 23:00 每小时，每格代表该小时整点
+for (let h = 8; h <= 23; h++) HOURS.push(h);
+const HOUR_LABEL = h => String(h).padStart(2,'0') + ':00';
+const PALETTE = ['#4066d5','#198b72','#d97b29','#8a5fd0','#c0392b','#2f8fb0','#b07a2a','#6a7ba6'];
+
+const SHARED = /^https?:$/.test(location.protocol);   // 经服务器(共享)打开 = 多人协作模式
+const ROOM   = (new URLSearchParams(location.search).get('room')||'').trim().slice(0,20) || 'default';
+const API    = '/api/state?room=' + encodeURIComponent(ROOM);
+
+let S;          // 状态对象
+let MODE = 'edit';   // edit | all | pair
+let ACTIVE = null;   // 正在填写的人 id（纯本地偏好，不同步）
+// ---- 共享同步状态 ----
+let VER = 0;                 // 服务端已知版本号
+const DIRTY = new Set();     // 本地已改、待上传的 person id
+const DELP  = new Set();     // 本地已删除、待通知服务端的 person id
+let postTimer = null, pollTimer = null, posting = false, reflushPending = false;
+let LAN_IP = null;   // 服务器探测到的局域网 IP（用于生成手机/他人可访问的分享链接）
+
+function defaultState(){
+  return { people:[], data:{} };   // data: { personId: {'d_h': true} }   d=0(周一)..6, h=8..23
+}
+function load(){
+  if(SHARED) return null;         // 共享模式以服务器数据为准，不用本地旧缓存
+  try{ const raw = localStorage.getItem(LS_KEY); if(!raw) return null;
+    const o = JSON.parse(raw);
+    if(o && Array.isArray(o.people) && o.data && typeof o.data==='object') return o;
+  }catch(e){}
+  return null;
+}
+function persist(){               // 本地模式：写入 localStorage
+  if(SHARED) return;
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){ toast('保存失败：浏览器存储不可用','warn'); }
+}
+function persistPref(){ try{ localStorage.setItem(LS_ACT, ACTIVE||''); }catch(e){} }
+const uid = () => 'p' + Math.random().toString(36).slice(2,9);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+S = load() || defaultState();
+ACTIVE = localStorage.getItem(LS_ACT);
+/* 清理旧字段：active 不再存入 people；颜色非法时回退 */
+S.people.forEach(p => { delete p.active; if(!PALETTE.includes(p.color)) p.color = PALETTE[S.people.indexOf(p)%PALETTE.length]; });
+function refreshActive(){
+  if(!S.people.length) ACTIVE = null;
+  else if(!S.people.some(p=>p.id===ACTIVE)) ACTIVE = S.people[0].id;
+  persistPref();
+}
+refreshActive();
+
+/* ================= 派生数据 ================= */
+function keyOf(d,h){ return d + '_' + h; }
+function freeCount(p){ return Object.keys(S.data[p.id]||{}).length; }
+function filledPeople(){ return S.people.filter(p => freeCount(p) > 0); }
+function active(){ return S.people.find(p => p.id===ACTIVE) || null; }
+function setActive(id){ if(!S.people.some(p=>p.id===id)) return; ACTIVE = id; persistPref(); }
+function commonAll(){
+  const filled = filledPeople();
+  const out = {};
+  if(filled.length === 0) return out;
+  for(let d=0;d<7;d++) for(let h of HOURS){
+    const k = keyOf(d,h);
+    if(filled.every(p => S.data[p.id] && S.data[p.id][k])) out[k]=true;
+  }
+  return out;
+}
+function hoursOf(listObj){ return Object.keys(listObj||{}).length; }
+
+/* ================= 渲染 ================= */
+const $ = id => document.getElementById(id);
+
+function renderAll(){
+  renderStats(); renderPeople(); renderMode();
+}
+function renderStats(){
+  const filled = filledPeople();
+  const nAll = hoursOf(commonAll());
+  let total = 0; S.people.forEach(p => total += freeCount(p));
+  $('stPeople').textContent = S.people.length;
+  $('stFilled').textContent = filled.length;
+  $('stHours').textContent = total;
+  $('stCommon').textContent = nAll;
+}
+function renderPeople(){
+  const box = $('peopleList'); box.innerHTML='';
+  if(S.people.length===0){
+    box.innerHTML = '<div class="empty-hint" style="padding:14px 0;width:100%"><b>还没有填写者</b>在上方输入姓名并点击“添加”，或先用示例数据体验。</div>';
+    return;
+  }
+  const a = active();
+  S.people.forEach(p=>{
+    const c = freeCount(p); const filled = c>0;
+    const chip = document.createElement('div');
+    chip.className = 'person-chip' + (ACTIVE===p.id?' active':'');
+    chip.style.setProperty('--dot', p.color);
+    chip.innerHTML =
+      '<span class="pdot"></span>'+
+      '<span class="pname">'+esc(p.name)+'</span>'+
+      '<span class="phours '+(filled?'ok':(a&&a.id===p.id?'warn':'warn'))+'">'+c+' h</span>'+
+      '<span class="chip-acts">'+
+        '<button class="chip-act" data-act="rename" data-id="'+p.id+'" title="改名">✎</button>'+
+        '<button class="chip-act del" data-act="del" data-id="'+p.id+'" title="删除">✕</button>'+
+      '</span>';
+    chip.onclick = e => {
+      const act = e.target.getAttribute && e.target.getAttribute('data-act');
+      if(act){ 
+        if(act==='del') removePerson(p.id);
+        else if(act==='rename') renamePerson(p);
+        return;
+      }
+      setActive(p.id);
+      if(MODE!=='edit'){ MODE='edit'; syncSeg(); }
+      renderAll();
+    };
+    box.appendChild(chip);
+  });
+}
+function removePerson(id){
+  const gone = S.people.find(p=>p.id===id);
+  if(!confirm('删除“'+((gone||{}).name||'')+'”？其空闲标记也会一并删除。')) return;
+  S.people = S.people.filter(p=>p.id!==id);
+  delete S.data[id];
+  DIRTY.delete(id);
+  if(SHARED && gone) { DELP.add(id); schedulePost(); }
+  refreshActive(); persist(); renderAll();
+  toast('已删除'+(gone?('“'+gone.name+'”'):'')+'');
+}
+function renamePerson(p){
+  const nm = prompt('新的姓名：', p.name);
+  if(nm===null) return;
+  const name = (nm||'').trim().slice(0,12);
+  if(!name){ toast('姓名不能为空','warn'); return; }
+  p.name = name; changed([p.id]); persist(); renderAll();
+}
+function addPerson(name){
+  name = (name||'').trim().slice(0,12);
+  if(!name){ toast('请输入姓名','warn'); return null; }
+  if(S.people.length>=40){ toast('填写者过多，最多 40 人','warn'); return null; }
+  const p = { id: uid(), name, color: PALETTE[S.people.length % PALETTE.length] };
+  S.people.push(p); S.data[p.id] = {};
+  ACTIVE = p.id; persistPref();
+  changed([p.id]);
+  persist(); renderAll();
+  toast('已添加“'+name+'”，点击格子标记空闲');
+  return p;
+}
+
+/* ---------- 课表网格生成 ---------- */
+function cellHTML(d,h){
+  const k = keyOf(d,h); const weekend = d>=5;
+  const cls = ['slot'];
+  if(weekend) cls.push('weekend');
+  const a = active();
+  const filled = filledPeople();
+  let inner = '', title='', clickable = false;
+
+  if(MODE==='edit'){
+    if(!a){ /* 未选择，仅展示空网格 */ }
+    else if(S.data[a.id] && S.data[a.id][k]){ cls.push('free-active'); inner='<b style="color:#fff;font-size:12px">✓</b>'; }
+    clickable = !!a;
+  }
+  else if(MODE==='all'){
+    const ca = commonAll();
+    if(ca[k]){ cls.push('all-free'); inner='<b>✓</b>'; }
+    title = '所有已填写者都空闲';
+  }
+  else if(MODE==='pair'){
+    const A = $('pairA').value, B = $('pairB').value;
+    if(A && B){
+      const hasA = !!(S.data[A]&&S.data[A][k]), hasB = !!(S.data[B]&&S.data[B][k]);
+      if(hasA && hasB){ cls.push('both'); inner='<b>✓</b>'; }
+      else if(hasA){ cls.push('a-only'); inner='<span class="lbl">A</span>'; }
+      else if(hasB){ cls.push('b-only'); inner='<span class="lbl">B</span>'; }
+    }
+  }
+  if(clickable) cls.push('clickable');
+  const ds = S.data;
+  // 填写模式下让格子带上 active 颜色变量
+  let style='';
+  if(MODE==='edit' && a) style='--dot:'+a.color+';';
+  if(MODE==='pair'){
+    const A = $('pairA').value, B = $('pairB').value;
+    const pa = S.people.find(p=>p.id===A), pb = S.people.find(p=>p.id===B);
+    if(pa) style += '--aSoft:'+shade(pa.color,0.25)+';';
+    if(pb) style += '--bSoft:'+shade(pb.color,0.25)+';';
+  }
+  return '<div class="'+cls.join(' ')+'" data-d="'+d+'" data-h="'+h+'" style="'+style+'" title="'+esc(DAYS[d]+' '+HOUR_LABEL(h))+'–'+HOUR_LABEL(h+1)+'">'+inner+'</div>';
+}
+function shade(hex, f){ // f: 0..1 向白混合
+  const n = parseInt(hex.slice(1),16);
+  const r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  const m = (v)=> Math.round(v + (255-v)*f);
+  return '#'+((1<<24)+(m(r)<<16)+(m(g)<<8)+m(b)).toString(16).slice(1);
+}
+function dayHeaderHTML(d){
+  const wkend = d>=5 ? ' sat' : '';
+  return '<div class="t-day'+wkend+'">'+DAYS[d]+'</div>';
+}
+function renderGrid(){
+  const g = $('grid'); g.innerHTML='';
+  g.innerHTML = '<div class="t-corner">时间</div>' + DAYS.map((_,d)=>dayHeaderHTML(d)).join('');
+  for(const h of HOURS){
+    g.innerHTML += '<div class="time-cell"><b>'+HOUR_LABEL(h)+'</b></div>';
+    for(let d=0;d<7;d++) g.innerHTML += cellHTML(d,h);
+  }
+}
+
+/* ---------- 面板文案 / 图例 / 摘要 ---------- */
+function fmtBlock(dayIdx, startH, endH){
+  return '<span class="sd">'+DAYS[dayIdx]+'</span><span class="st">'+HOUR_LABEL(startH)+' – '+HOUR_LABEL(endH)+'</span>';
+}
+function mergeBlocks(listObj){
+  // 返回 [{d, start, end}]，end 为开区间小时
+  const out = [];
+  for(let d=0;d<7;d++){
+    let runStart=null;
+    for(let i=0;i<HOURS.length;i++){
+      const h = HOURS[i];
+      const on = !!(listObj && listObj[keyOf(d,h)]);
+      if(on && runStart===null) runStart = h;
+      if(!on && runStart!==null){ out.push({d, start:runStart, end:h}); runStart=null; }
+    }
+    if(runStart!==null) out.push({d, start:runStart, end:HOURS[HOURS.length-1]+1});
+  }
+  return out;
+}
+function summaryHTML(blocks){
+  if(!blocks.length) return '';
+  return blocks.map(b=>'<div class="sum-block">'+fmtBlock(b.d,b.start,b.end)+'</div>').join('');
+}
+function bannerHTML(txt, kind){ return '<div class="banner '+kind+'">'+txt+'</div>'; }
+
+function renderMode(){
+  // 段按钮
+  document.querySelectorAll('#viewSeg button').forEach(b=> b.classList.toggle('active', b.dataset.v===MODE));
+  const a = active();
+
+  // 两人模式：先填充/保持选择（其后再读 pairA/pairB 均有效）
+  if(MODE==='pair'){
+    const selA=$('pairA'), selB=$('pairB');
+    const opts = S.people.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('');
+    const keepA = selA.value && S.people.some(p=>p.id===selA.value) ? selA.value : (a? a.id : (S.people[0]||{}).id||'');
+    const keepB = selB.value && keepA!==selB.value && S.people.some(p=>p.id===selB.value) ? selB.value : '';
+    selA.innerHTML = opts; selB.innerHTML = opts;
+    selA.value = keepA;
+    selB.value = S.people.some(p=>p.id===keepB) ? keepB : (S.people.find(p=>p.id!==keepA)||{}).id || '';
+  }
+
+  // 状态条
+  const ca = commonAll(); const cb = mergeBlocks(ca);
+  const filled = filledPeople();
+  let strip = '';
+  if(S.people.length===0) strip = '尚无填写者，请先添加。';
+  else if(MODE==='edit'){
+    strip = a
+      ? '正在填写：<b style="color:'+a.color+'">'+esc(a.name)+'</b>（已标 '+freeCount(a)+' h）· 当前全员交集 <b>'+cb.length+' 段</b> <span class="jump" id="jumpAll">查看 →</span>'
+      : '请点击上方填写者头像设为“正在填写”后再在格子中标记。';
+  } else if(MODE==='all'){
+    strip = filled.length>=2
+      ? '纳入 '+filled.length+' 位已填写者 · 交集共 <b>'+cb.length+' 段 / '+hoursOf(ca)+' h</b>'
+      : filled.length===1 ? '目前仅 1 人已填写，交集=该人自己的空闲；至少 2 人已填写后才有对比意义。' : '还没有人填写空闲时间。';
+  } else {
+    const A=$('pairA').value, B=$('pairB').value;
+    const pa=S.people.find(p=>p.id===A), pb=S.people.find(p=>p.id===B);
+    strip = 'A：'+(pa?freeCount(pa):0)+' h · B：'+(pb?freeCount(pb):0)+' h';
+  }
+  $('statusStrip').innerHTML = strip;
+  if($('jumpAll')) $('jumpAll').onclick = ()=>{ MODE='all'; syncSeg(); renderAll(); };
+
+  // 标题
+  const pt=$('panelTitle'), ps=$('panelSub');
+  if(MODE==='edit'){
+    pt.innerHTML = a ? '✏️ 填写 <span>'+esc(a.name)+'</span> 的空闲时间' : '✏️ 填写空闲时间';
+    ps.textContent = a ? '点击“空”格子 = 标记为这一小时有空；再点一次取消。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
+    $('pairPick').hidden = true;
+  } else if(MODE==='all'){
+    pt.innerHTML = '👥 全员交集 <span>'+cb.length+' 段</span>';
+    ps.textContent = '仅统计已填写（≥1 小时）的填写者；绿色 = 所有人此刻都有空。';
+    $('pairPick').hidden = true;
+  } else {
+    pt.innerHTML = '🔗 两人交集';
+    ps.textContent = '选择两人后，格子显示各自空闲与重叠部分。';
+    $('pairPick').hidden = false;
+  }
+
+  renderGrid();
+  renderLegend();
+  renderBannerAndSummary();
+}
+
+function renderLegend(){
+  const lg=$('legend'); lg.innerHTML='';
+  const add = (color, style, text)=>{ lg.innerHTML += '<span class="lchip"><i style="'+style+'"></i>'+text+'</span>'; };
+  if(MODE==='edit'){
+    const a = active();
+    if(a) add(a.color, 'background:'+a.color, '正在填写 · '+esc(a.name)+' 有空');
+    add('#fff','background:#fff;border:1px solid var(--line)','未标记');
+  } else if(MODE==='all'){
+    add('#198b72','background:#198b72','所有已填写者都有空');
+    add('#fff','background:#fff;border:1px solid var(--line)','非全员空闲');
+  } else {
+    const A=$('pairA').value, B=$('pairB').value;
+    const pa=S.people.find(p=>p.id===A), pb=S.people.find(p=>p.id===B);
+    add('#325591','background:#325591','A ∩ B 共同空闲');
+    if(pa) add(pa.color, 'background:'+shade(pa.color,.3)+';border:1px solid '+pa.color, '仅 '+esc(pa.name)+'');
+    if(pb) add(pb.color, 'background:'+shade(pb.color,.3)+';border:1px solid '+pb.color, '仅 '+esc(pb.name)+'');
+  }
+}
+
+function renderBannerAndSummary(){
+  const bn=$('banner'), sm=$('summary');
+  bn.innerHTML=''; sm.innerHTML='';
+  if(MODE==='edit'){
+    const a=active();
+    if(!S.people.length) return;
+    if(!a){ bn.innerHTML = bannerHTML('请在上方点选一位<b>正在填写</b>的填写者后，即可在课表格子上点击标记空闲。','info'); return; }
+    const blocks = mergeBlocks(S.data[a.id]||{});
+    if(blocks.length) sm.innerHTML = summaryHTML(blocks);
+    return;
+  }
+  if(MODE==='all'){
+    const filled = filledPeople();
+    if(S.people.length===0){ bn.innerHTML = bannerHTML('尚未添加填写者，先添加并各自标记空闲时间。','info'); return; }
+    if(filled.length<2){
+      bn.innerHTML = bannerHTML(filled.length===1
+        ? '目前只有 1 人已填写。系统只对<b>已填写（≥1 小时）</b>的人求交集，避免空白者把交集清零——请让其余填写者也来标一标。'
+        : '还没有人填写空闲时间。切到「✏️ 填写我的空闲」，依次为每位填写者点格子。','warn');
+      return;
+    }
+    const blocks = mergeBlocks(commonAll());
+    if(!blocks.length){ bn.innerHTML = bannerHTML('没有找到所有人同时空闲的时间段 😢 试着让某几位调整一下安排。','danger'); return; }
+    sm.innerHTML = summaryHTML(blocks);
+    bn.innerHTML = bannerHTML('✅ 以下 '+blocks.length+' 段是 <b>'+filled.length+' 位已填写者</b>同时空闲的时间。','ok');
+    return;
+  }
+  // pair
+  const A=$('pairA').value, B=$('pairB').value;
+  const pa=S.people.find(p=>p.id===A), pb=S.people.find(p=>p.id===B);
+  if(!pa || !pb){ bn.innerHTML = bannerHTML('需至少 2 位填写者才能进行两人对比。','info'); return; }
+  const inter = {};
+  for(let d=0;d<7;d++) for(let h of HOURS){ const k=keyOf(d,h);
+    if((S.data[pa.id]||{})[k] && (S.data[pb.id]||{})[k]) inter[k]=true; }
+  const blocks = mergeBlocks(inter);
+  if(!blocks.length){ bn.innerHTML = bannerHTML('“'+esc(pa.name)+'”与“'+esc(pb.name)+'”没有同时空闲的时间。','danger'); return; }
+  sm.innerHTML = summaryHTML(blocks);
+  bn.innerHTML = bannerHTML('🔗 <b>'+esc(pa.name)+'</b> 与 <b>'+esc(pb.name)+'</b> 共同空闲 '+blocks.length+' 段。','ok');
+}
+
+function syncSeg(){ document.querySelectorAll('#viewSeg button').forEach(b=>b.classList.toggle('active', b.dataset.v===MODE)); }
+function renderAll(){ renderStats(); renderPeople(); renderMode(); }
+
+/* ============ 多人协作同步（仅 SHARED 模式生效） ============ */
+function changed(ids){ if(!SHARED) return; ids.forEach(id=>DIRTY.add(id)); schedulePost(); }
+function changedDel(id){ if(!SHARED) return; DIRTY.delete(id); DELP.add(id); schedulePost(); }
+function schedulePost(){
+  if(!SHARED) return;
+  if(postTimer) return;
+  if(posting){ reflushPending = true; return; }   // 上传中再有改动，结束后补一次
+  postTimer = setTimeout(flush, 500);
+}
+async function flush(){
+  postTimer = null;
+  if(!SHARED || posting) return;
+  if(!DIRTY.size && !DELP.size) return;
+  posting = true; setSyncUi('busy');
+  const pids = [...DIRTY];
+  const people = S.people.filter(p=>DIRTY.has(p.id)).map(p=>({id:p.id,name:p.name,color:p.color}));
+  const data = {}; pids.forEach(pid=>{ if(S.data[pid]) data[pid]=S.data[pid]; });
+  const ok = await postOp({ ver:VER, pids, del:[...DELP], people, data });
+  posting = false;
+  if(ok){ setSyncUi('ok'); await pull(true); }   // 拉取服务端合并后的权威状态
+  if(reflushPending){ reflushPending = false; schedulePost(); }
+}
+async function postOp(body){
+  try{
+    const r = await fetch(API, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const j = await r.json();
+    if(j && j.ok){ VER = j.version||0; DIRTY.clear(); DELP.clear(); return true; }
+    setSyncUi('err'); return false;
+  }catch(e){ setSyncUi('err'); return false; }
+}
+async function pull(force){
+  if(!SHARED) return;
+  try{
+    const r = await fetch(API); const j = await r.json();
+    if(!j || !j.ok){ setSyncUi('err'); return; }
+    if(force || j.version > VER){
+      if(DIRTY.size || DELP.size){ setSyncUi('busy'); return; }  // 还有未上传改动，先不上传完不覆盖
+      adopt(j);
+    } else {
+      VER = Math.max(VER, j.version||0);
+    }
+    setSyncUi('ok');
+  }catch(e){ setSyncUi('err'); }
+}
+function adopt(j){
+  const seen = new Set(); const people = [];
+  (j.people||[]).forEach(p=>{
+    if(!p || !p.id || !p.name || seen.has(p.id)) return; seen.add(p.id);
+    people.push({ id:p.id, name:p.name, color:PALETTE.includes(p.color)?p.color:PALETTE[people.length%PALETTE.length] });
+  });
+  const ids = new Set(people.map(p=>p.id));
+  const data = {};
+  Object.keys(j.data||{}).forEach(k=>{ if(ids.has(k) && j.data[k] && typeof j.data[k]==='object') data[k] = j.data[k]; });
+  S = { people, data }; VER = j.version||0;
+  refreshActive();
+  renderAll();
+}
+async function resetShared(){          // 清空整个房间（对所有人生效）
+  setSyncUi('busy');
+  if(await postOp({ ver:VER, reset:true })){ await pull(true); toast('已清空（已同步到服务器）'); }
+  else toast('清空失败：无法连接服务器','warn');
+}
+async function replaceShared(pp, dd){  // 导入 = 整体替换房间
+  setSyncUi('busy');
+  if(await postOp({ ver:VER, replace:true, people:pp, data:dd })) await pull(true);
+  else toast('导入失败：无法连接服务器','warn');
+}
+
+/* ================= 事件 ================= */
+$('viewSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  MODE = b.dataset.v; syncSeg(); renderAll();
+});
+$('grid').addEventListener('click', e=>{
+  const cell = e.target.closest('.slot'); if(!cell) return;
+  if(MODE!=='edit') return;
+  const a = active();
+  if(!a){ toast('请先点击上方填写者头像设为“正在填写”','warn'); return; }
+  const d = +cell.dataset.d, h = +cell.dataset.h, k = keyOf(d,h);
+  const obj = S.data[a.id] || (S.data[a.id]={});
+  if(obj[k]) delete obj[k]; else obj[k] = true;
+  changed([a.id]); persist(); renderAll();
+});
+['pairA','pairB'].forEach(id=>{
+  $(id).addEventListener('change', ()=>{ if(MODE==='pair') renderMode(); });
+});
+$('addForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const inp=$('newName'); const p=addPerson(inp.value); if(p) inp.value='';
+});
+$('btnAdd').addEventListener('click', ()=>{ const v = prompt('填写者姓名：'); if(v) addPerson(v); });
+
+function demo(){
+  const mk=(n,c)=>({id:uid(),name:n,color:c});
+  const a=mk('张三',PALETTE[0]), b=mk('李四',PALETTE[1]), c=mk('王五',PALETTE[2]);
+  const data={};
+  const set=(p,ds,hs)=>{ data[p.id]=data[p.id]||{}; ds.forEach(d=>hs.forEach(h=>data[p.id][keyOf(d,h)]=true)); };
+  // 张三：周一 9-12、周二 14-17、周四 10-12、周五 15-18
+  set(a,[0],[9,10,11]); set(a,[1],[14,15,16]); set(a,[3],[10,11]); set(a,[4],[15,16,17]);
+  // 李四：周一 9-11、周三 10-12、周四 10-12、周六 9-12
+  set(b,[0],[9,10]); set(b,[2],[10,11]); set(b,[3],[10,11]); set(b,[5],[9,10,11]);
+  // 王五：周一 10-12、周三 10-11、周四 10-11、周日 14-17
+  set(c,[0],[10,11]); set(c,[2],[10]); set(c,[3],[10]); set(c,[6],[14,15,16]);
+  if(SHARED){          // 共享模式：把示例作为“新增人员”合并进当前房间
+    const fresh=[a,b,c].filter(p=>!S.people.some(x=>x.id===p.id));
+    fresh.forEach(p=>{ S.people.push(p); S.data[p.id]=data[p.id]||{}; DIRTY.add(p.id); });
+    if(!fresh.length){ toast('示例人员似乎已存在','warn'); return; }
+    ACTIVE = a.id; persistPref(); schedulePost();
+    toast('已向房间加入示例：张三/李四/王五（同步中）');
+  } else {
+    S = { people:[a,b,c], data };
+    ACTIVE = a.id; persistPref(); persist();
+    toast('已载入示例：张三/李四/王五');
+  }
+  renderAll();
+  MODE='all'; syncSeg(); renderAll();
+}
+$('btnDemo').addEventListener('click', ()=>{ if(confirm('载入示例数据？会覆盖当前内容。')) demo(); });
+
+/* 导出/导入 */
+$('btnExport').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(S,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='空闲时间协调器-数据.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+$('btnImport').addEventListener('click', ()=>{ $('importMask').classList.add('open'); $('importText').value=''; });
+$('doImport').addEventListener('click', async ()=>{
+  try{
+    const o = JSON.parse($('importText').value);
+    if(!Array.isArray(o.people) || !o.data || typeof o.data!=='object') throw 0;
+    const seen=new Set(); const pp=[];
+    o.people.forEach(p=>{ if(!p || !p.id || !p.name || seen.has(p.id)) return; seen.add(p.id);
+      pp.push({ id:p.id, name:String(p.name).slice(0,12),
+                color:PALETTE.includes(p.color)?p.color:PALETTE[pp.length%PALETTE.length] }); });
+    const dd={}; pp.forEach(p=>{ const d=o.data[p.id];
+      if(d && typeof d==='object'){ const f={};
+        Object.keys(d).forEach(k=>{ if(/^\d+_\d+$/.test(k) && d[k]) f[k]=true; });
+        if(Object.keys(f).length) dd[p.id]=f; } });
+    closeMask('importMask');
+    if(SHARED) await replaceShared(pp, dd);        // 导入 = 整体替换房间（需谨慎）
+    else { S={ people:pp, data:dd }; refreshActive(); persist(); renderAll(); }
+    toast('导入成功');
+  }catch(e){ toast('JSON 格式不正确','warn'); }
+});
+$('btnReset').addEventListener('click', ()=>{ $('resetMask').classList.add('open'); });
+$('doReset').addEventListener('click', ()=>{
+  closeMask('resetMask');
+  if(SHARED){ resetShared(); }                      // 清空整个房间（对所有填写着生效）
+  else { S = defaultState(); refreshActive(); persist(); renderAll(); toast('已清空'); }
+});
+document.querySelectorAll('.modal-mask').forEach(m=>{
+  m.addEventListener('click', e=>{ if(e.target===m || e.target.getAttribute('data-close')) closeMask(m.id); });
+});
+function closeMask(id){ document.getElementById(id).classList.remove('open'); }
+
+/* toast */
+let toastTimer=null;
+function toast(msg, kind){
+  const t=$('toast'); t.textContent=msg; t.className='show'+(kind?' '+kind:'');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.className='',2400);
+}
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.modal-mask.open').forEach(m=>m.classList.remove('open')); });
+
+/* ============ 共享模式状态条 / 房间控制 ============ */
+function setSyncUi(state){
+  const dot = $('syncDot'); if(!dot) return;
+  const t = $('syncText'), h = $('syncHint');
+  if(!SHARED){
+    dot.className = 'live-dot';
+    t.textContent = '本地模式 · 数据仅保存在本浏览器';
+    h.innerHTML = '多人协作：在本目录运行 <b>python3 server.py</b>，再用 http://… 地址打开，并把带链接的网址发给其他人。';
+    return;
+  }
+  dot.className = 'live-dot ' + (state==='err'?'err':(state==='ok'?'ok':'busy'));
+  if(state==='err')      t.textContent = '多人协作 · 房间 “'+ROOM+'” · 同步失败（服务器不可达）';
+  else if(state==='ok')  t.textContent = '多人协作 · 房间 “'+ROOM+'” · 已同步 '+(new Date()).toLocaleTimeString('zh-CN',{hour12:false});
+  else                   t.textContent = '多人协作 · 房间 “'+ROOM+'” · 同步中…';
+  h.textContent = '把当前页面链接发给同房间的人，各自填写即可自动汇总。';
+}
+function roomUrl(room){ const u = new URL(location.href); u.searchParams.set('room', room); return u.href; }
+/* 供他人/手机打开的“分享链接”：若本机是 localhost，则替换为服务器探测到的局域网 IP */
+function shareUrl(){
+  const u = new URL(location.href);
+  u.searchParams.set('room', ROOM);
+  if(['localhost','127.0.0.1','::1'].includes(u.hostname) && LAN_IP && LAN_IP !== '127.0.0.1'){
+    u.hostname = LAN_IP;
+  }
+  return u.href;
+}
+async function initHostInfo(){
+  if(!SHARED) return;
+  try{
+    const r = await fetch('/api/hostinfo');
+    const j = await r.json();
+    if(j && j.ok && j.lan){ LAN_IP = j.lan; }
+  }catch(e){}
+  showShareHint();
+}
+function showShareHint(){
+  const h = $('syncHint'); if(!h) return;
+  if(!SHARED) return;
+  if(LAN_IP){ h.innerHTML = '手机/他人打开：<b style="font-family:ui-monospace,Menlo,monospace">'+esc(shareUrl())+'</b>（点右上「🔗 复制共享链接」发送）'; }
+  else h.textContent = '把当前页面链接发给同房间的人，各自填写即可自动汇总。';
+}
+
+/* 房间切换 / 复制链接 / 手动同步 */
+$('syncRt').hidden = !SHARED;
+$('roomInput').value = ROOM;
+function gotoRoom(){ const r=($('roomInput').value||'').trim().slice(0,20); if(!r){ toast('请输入房间名','warn'); return; } if(r!==ROOM) location.href = roomUrl(r); }
+$('roomGo').addEventListener('click', gotoRoom);
+$('roomInput').addEventListener('keydown', e=>{ if(e.key==='Enter') gotoRoom(); });
+$('copyLink').addEventListener('click', async ()=>{
+  const u = shareUrl();
+  try{ await navigator.clipboard.writeText(u); toast('已复制共享链接：'+u); }
+  catch(e){ prompt('复制以下链接发给其他人：', u); }
+});
+$('syncNow').addEventListener('click', ()=> pull(true));
+
+/* 启动 */
+if(SHARED){
+  pollTimer = setInterval(()=> pull(false), 4000);   // 每 4 秒自动拉取他人改动
+  pull(true);
+  initHostInfo().then(showShareHint);
+  toast('多人协作已开启 · 房间 “'+ROOM+'”');
+} else {
+  setSyncUi('local');
+}
+renderAll();
+</script>
+</body>
+</html>
