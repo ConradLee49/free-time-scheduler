@@ -618,12 +618,20 @@ function syncSeg(){ document.querySelectorAll('#viewSeg button').forEach(b=>b.cl
 function renderAll(){ renderStats(); renderPeople(); renderMode(); }
 
 /* ============ 多人协作同步（仅 SHARED 模式生效） ============ */
+/* 指针锁定：检测到正在按/点选时，推迟“整表重绘”，避免重绘落在点击中途而吞掉操作 */
+let lockUntil = 0, lockTimer = null;
+document.addEventListener('pointerdown', ()=>{ lockUntil = performance.now() + 320; }, true);
+function scheduleRender(fn){
+  const wait = lockUntil - performance.now();
+  if(wait > 0){ clearTimeout(lockTimer); lockTimer = setTimeout(fn, wait + 25); }
+  else fn();
+}
 function changed(ids){ if(!SHARED) return; ids.forEach(id=>DIRTY.add(id)); schedulePost(); }
 function changedDel(id){ if(!SHARED) return; DIRTY.delete(id); DELP.add(id); schedulePost(); }
 function schedulePost(){
   if(!SHARED) return;
-  if(postTimer) return;
   if(posting){ reflushPending = true; return; }   // 上传中再有改动，结束后补一次
+  if(postTimer) clearTimeout(postTimer);          // 尾随防抖：连续点选期间不触发上传/重绘
   postTimer = setTimeout(flush, 500);
 }
 async function flush(){
@@ -672,7 +680,7 @@ function adopt(j){
   Object.keys(j.data||{}).forEach(k=>{ if(ids.has(k) && j.data[k] && typeof j.data[k]==='object') data[k] = j.data[k]; });
   S = { people, data }; VER = j.version||0;
   refreshActive();
-  renderAll();
+  scheduleRender(renderAll);   // 整体重绘延后到指针锁定结束，避免吞点击
 }
 async function resetShared(){          // 清空整个房间（对所有人生效）
   setSyncUi('busy');
