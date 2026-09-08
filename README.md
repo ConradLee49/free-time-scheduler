@@ -56,6 +56,26 @@ python3 server.py            # 默认端口 8765；也可 python3 server.py 8080
 > ```
 > 会打印一个 `https://xxx.trycloudflare.com` 公网链接（本机需保持运行、联网即可访问）。
 
+## 部署到 PythonAnywhere（免信用卡）
+
+Render 的免费 Web 服务要求先绑信用卡；**PythonAnywhere 免费版无需信用卡**，适合本项目（单进程、文件存储、不休眠、长期有效）。它要求 WSGI 格式，仓库里已备好 `wsgi_app.py`。
+
+1. 注册 https://www.pythonanywhere.com （免费）。
+2. 进入 **Bash** 控制台，克隆代码：
+   ```bash
+   git clone https://github.com/ConradLee49/free-time-scheduler.git
+   ```
+3. 顶部 **Web** 标签 → **Add a new web app** → **Manual configuration** → 选 Python 版本（3.10+）。
+4. 在 Web 页找到该应用的 **WSGI configuration file**（形如 `.../ConradLee49_pythonanywhere_com_wsgi.py`），点进去把默认内容整体替换为：
+   ```python
+   import sys
+   sys.path.insert(0, '/home/<你的用户名>/free-time-scheduler')
+   from wsgi_app import application
+   ```
+5. 回 Web 页点 **Reload**。访问地址：`https://<你的用户名>.pythonanywhere.com/?room=小组名`（发给任何人、任何网络都能开）。
+
+数据文件 `server_data.json` 会写在 `/home/<你的用户名>/free-time-scheduler/` 下，免费版文件系统长期保留。
+
 ## 页面功能
 
 - **✏️ 填写我的空闲**：添加/改名/删除填写者（自动配色）；点人设为“正在填写”，网格点格子 = 该小时空闲，再点取消。每格 1 小时，范围 周一~周日 × 08:00–23:00。
