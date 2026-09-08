@@ -259,7 +259,11 @@ const PALETTE = ['#4066d5','#198b72','#d97b29','#8a5fd0','#c0392b','#2f8fb0','#b
 
 const SHARED = /^https?:$/.test(location.protocol);   // 经服务器(共享)打开 = 多人协作模式
 const ROOM   = (new URLSearchParams(location.search).get('room')||'').trim().slice(0,20) || 'default';
-const API    = '/api/state?room=' + encodeURIComponent(ROOM);
+/* 数据后端：github.io 前端跨域请求用 PythonAnywhere；本机/同源时用相对路径 */
+const BACKEND = 'https://conradlee49.pythonanywhere.com';
+const API_BASE = (['localhost','127.0.0.1'].includes(location.hostname)
+                  || location.hostname === new URL(BACKEND).hostname) ? '' : BACKEND;
+const API    = API_BASE + '/api/state?room=' + encodeURIComponent(ROOM);
 
 let S;          // 状态对象
 let MODE = 'edit';   // edit | all | pair
@@ -796,7 +800,7 @@ function shareUrl(){
 async function initHostInfo(){
   if(!SHARED) return;
   try{
-    const r = await fetch('/api/hostinfo');
+    const r = await fetch(API_BASE + '/api/hostinfo');
     const j = await r.json();
     if(j && j.ok && j.lan){ LAN_IP = j.lan; }
   }catch(e){}

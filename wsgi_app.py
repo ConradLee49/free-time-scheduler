@@ -42,6 +42,9 @@ def _ok(environ, start_response, status, payload, ctype="application/json; chars
     start_response(status, [
         ("Content-Type", ctype),
         ("Content-Length", str(len(body))),
+        ("Access-Control-Allow-Origin", "*"),
+        ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+        ("Access-Control-Allow-Headers", "Content-Type"),
     ])
     return [] if head_only else [body]
 
@@ -64,6 +67,16 @@ def _read_body(environ):
 def application(environ, start_response):
     path = urlparse(environ.get("PATH_INFO", "/")).path
     method = environ.get("REQUEST_METHOD", "GET").upper()
+
+    if method == "OPTIONS":  # CORS 预检（github.io 前端跨域访问时浏览器会先发 OPTIONS）
+        start_response("200 OK", [
+            ("Content-Type", "text/plain"),
+            ("Content-Length", "0"),
+            ("Access-Control-Allow-Origin", "*"),
+            ("Access-Control-Allow-Methods", "GET, POST, OPTIONS"),
+            ("Access-Control-Allow-Headers", "Content-Type"),
+        ])
+        return [b""]
 
     if path == "/api/state":
         if method == "GET":
