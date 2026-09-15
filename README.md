@@ -61,12 +61,12 @@ python3 server.py            # 默认端口 8765；也可 python3 server.py 8080
 Render 的免费 Web 服务要求先绑信用卡；**PythonAnywhere 免费版无需信用卡**，适合本项目（单进程、文件存储、不休眠、长期有效）。它要求 WSGI 格式，仓库里已备好 `wsgi_app.py`。
 
 1. 注册 https://www.pythonanywhere.com （免费）。
-2. 进入 **Bash** 控制台，克隆代码：
+2. 进入 **Bash** 控制台，克隆你自己的仓库（先 fork，或直接用你自己的仓库地址）：
    ```bash
-   git clone https://github.com/ConradLee49/free-time-scheduler.git
+   git clone https://github.com/<你的用户名>/free-time-scheduler.git
    ```
 3. 顶部 **Web** 标签 → **Add a new web app** → **Manual configuration** → 选 Python 版本（3.10+）。
-4. 在 Web 页找到该应用的 **WSGI configuration file**（形如 `.../ConradLee49_pythonanywhere_com_wsgi.py`），点进去把默认内容整体替换为：
+4. 在 Web 页找到该应用的 **WSGI configuration file**（形如 `.../<你的用户名>_pythonanywhere_com_wsgi.py`），点进去把默认内容整体替换为：
    ```python
    import sys
    sys.path.insert(0, '/home/<你的用户名>/free-time-scheduler')
@@ -75,6 +75,21 @@ Render 的免费 Web 服务要求先绑信用卡；**PythonAnywhere 免费版无
 5. 回 Web 页点 **Reload**。访问地址：`https://<你的用户名>.pythonanywhere.com/?room=小组名`（发给任何人、任何网络都能开）。
 
 数据文件 `server_data.json` 会写在 `/home/<你的用户名>/free-time-scheduler/` 下，免费版文件系统长期保留。
+
+## 部署你自己的副本（供他人 / 异地使用）
+
+任何人都可以 clone 本仓库、部署**自己的一份**（数据各自独立）。两种形态：
+
+**A. 后端直接托管页面（最省事）**：按上面 Render 或 PythonAnywhere 部署后，后端自带页面，同源无需配置。
+分享链接：`https://<你的后端域名>/?room=小组名`
+
+**B. 前端放静态托管（如 GitHub Pages）+ 后端另放**：适合“前端用 github.io 域名（微信/Edge 更友好）”。
+- 后端需允许跨域（本仓库 `wsgi_app.py` / `server.py` 已内置 CORS，无需额外配置）
+- 前端通过 URL 参数指定后端：`https://<前端地址>/?room=小组名&api=https://<你的后端域名>`
+  - `api` 会被浏览器记住；也可在页面右侧“连接后端”里填一次
+  - 页面上的「🔗 复制共享链接」会自动把 `api` 一并带上，发出去别人打开即连对你的后端
+
+> 自己部署后，把链接里的 `room=` 换成你们小组名即可开始使用。
 
 ## 页面功能
 
@@ -102,9 +117,11 @@ Render 的免费 Web 服务要求先绑信用卡；**PythonAnywhere 免费版无
 
 | 文件 | 说明 |
 |---|---|
-| `index.html` | 页面（单机 + 共享双模式） |
-| `server.py` | 共享服务器（纯标准库；支持 `--port N` 或环境变量 `PORT`） |
+| `index.html` | 页面（单机 + 共享双模式；后端地址可由 `?api=` 配置） |
+| `server.py` | 共享服务器（纯标准库；支持 `--port N` 或环境变量 `PORT`；内置 CORS） |
+| `wsgi_app.py` | WSGI 入口，用于 PythonAnywhere 等 WSGI 平台 |
 | `Procfile` / `render.yaml` | Render 云部署配置 |
+| `LICENSE` | MIT 开源协议 |
 | `server_data.json` | 运行期自动生成（已在 `.gitignore` 忽略，勿提交） |
 
 ## 后续可扩展方向

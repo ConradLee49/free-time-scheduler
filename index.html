@@ -188,6 +188,10 @@ body[data-wkend="1"] .slot.weekend{background:repeating-linear-gradient(to botto
       <span class="sync-t" id="syncText">…</span>
       <span class="hint" id="syncHint"></span>
     </div>
+    <div class="sync-r" id="apiRow" hidden>
+      <input id="apiInput" placeholder="后端地址，如 https://你的用户名.pythonanywhere.com" style="width:300px" autocomplete="off" />
+      <button class="primary" id="apiSave">连接后端</button>
+    </div>
     <div class="sync-r" id="syncRt" hidden>
       <input id="roomInput" placeholder="房间名，如 组会/宿舍" maxlength="20" autocomplete="off" />
       <button id="roomGo">切换房间</button>
@@ -257,12 +261,19 @@ for (let h = 8; h <= 23; h++) HOURS.push(h);
 const HOUR_LABEL = h => String(h).padStart(2,'0') + ':00';
 const PALETTE = ['#4066d5','#198b72','#d97b29','#8a5fd0','#c0392b','#2f8fb0','#b07a2a','#6a7ba6'];
 
-const SHARED = /^https?:$/.test(location.protocol);   // 经服务器(共享)打开 = 多人协作模式
+const SHARED = /^https?:$/.test(location.protocol);   // 经服务器打开 = 多人协作模式
 const ROOM   = (new URLSearchParams(location.search).get('room')||'').trim().slice(0,20) || 'default';
-/* 数据后端：github.io 前端跨域请求用 PythonAnywhere；本机/同源时用相对路径 */
-const BACKEND = 'https://conradlee49.pythonanywhere.com';
-const API_BASE = (['localhost','127.0.0.1'].includes(location.hostname)
-                  || location.hostname === new URL(BACKEND).hostname) ? '' : BACKEND;
+/* ---- 后端地址配置（让别人也能部署自己的后端）----
+   优先：URL ?api=https://你的后端  → 会记住
+   次之：浏览器记住过的后端地址（localStorage，用于 github.io 等静态前端）
+   否则：同源（用 PythonAnywhere/server.py 自己托管时无需配置） */
+const STATIC_HOST = location.protocol === 'file:' ||
+  /(^|\.)(github\.io|pages\.dev|netlify\.app|vercel\.app|surge\.sh)$/i.test(location.hostname);
+const QS_API = (new URLSearchParams(location.search).get('api')||'').trim().replace(/\/+$/,'');
+let API_BASE = '';
+if(QS_API){ API_BASE = QS_API; try{ localStorage.setItem('fts-api', QS_API); }catch(e){} }
+else if(STATIC_HOST){ try{ API_BASE = (localStorage.getItem('fts-api')||'').replace(/\/+$/,''); }catch(e){} }
+const HAS_BACKEND = !(SHARED && STATIC_HOST && !API_BASE);   // 仅“静态前端且未配置后端”时需要先配置
 const API    = API_BASE + '/api/state?room=' + encodeURIComponent(ROOM);
 
 let S;          // 状态对象
@@ -636,7 +647,7 @@ function schedulePost(){
 }
 async function flush(){
   postTimer = null;
-  if(!SHARED || posting) return;
+  if(!SHARED || !HAS_BACKEND || posting) return;
   if(!DIRTY.size && !DELP.size) return;
   posting = true; setSyncUi('busy');
   const pids = [...DIRTY];
@@ -648,6 +659,7 @@ async function flush(){
   if(reflushPending){ reflushPending = false; schedulePost(); }
 }
 async function postOp(body){
+  if(!HAS_BACKEND) return false;
   try{
     const r = await fetch(API, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     const j = await r.json();
@@ -656,7 +668,7 @@ async function postOp(body){
   }catch(e){ setSyncUi('err'); return false; }
 }
 async function pull(force){
-  if(!SHARED) return;
+  if(!SHARED || !HAS_BACKEND) return;
   try{
     const r = await fetch(API); const j = await r.json();
     if(!j || !j.ok){ setSyncUi('err'); return; }
@@ -826,6 +838,12 @@ function setSyncUi(state){
     h.innerHTML = '多人协作：在本目录运行 <b>python3 server.py</b>，再用 http://… 地址打开，并把带链接的网址发给其他人。';
     return;
   }
+  if(SHARED && !HAS_BACKEND){
+    dot.className = 'live-dot busy';
+    t.textContent = '尚未配置后端地址';
+    h.innerHTML = '在右侧填入你的后端地址（如 <b>https://你的用户名.pythonanywhere.com</b>）后点「连接后端」。';
+    return;
+  }
   dot.className = 'live-dot ' + (state==='err'?'err':(state==='ok'?'ok':'busy'));
   if(state==='err')      t.textContent = '多人协作 · 房间 “'+ROOM+'” · 同步失败（服务器不可达）';
   else if(state==='ok')  t.textContent = '多人协作 · 房间 “'+ROOM+'” · 已同步 '+(new Date()).toLocaleTimeString('zh-CN',{hour12:false});
@@ -837,13 +855,14 @@ function roomUrl(room){ const u = new URL(location.href); u.searchParams.set('ro
 function shareUrl(){
   const u = new URL(location.href);
   u.searchParams.set('room', ROOM);
+  if(API_BASE) u.searchParams.set('api', API_BASE); else u.searchParams.delete('api');
   if(['localhost','127.0.0.1','::1'].includes(u.hostname) && LAN_IP && LAN_IP !== '127.0.0.1'){
     u.hostname = LAN_IP;
   }
   return u.href;
 }
 async function initHostInfo(){
-  if(!SHARED) return;
+  if(!SHARED || !HAS_BACKEND) return;
   try{
     const r = await fetch(API_BASE + '/api/hostinfo');
     const j = await r.json();
@@ -853,13 +872,20 @@ async function initHostInfo(){
 }
 function showShareHint(){
   const h = $('syncHint'); if(!h) return;
-  if(!SHARED) return;
-  if(LAN_IP){ h.innerHTML = '手机/他人打开：<b style="font-family:ui-monospace,Menlo,monospace">'+esc(shareUrl())+'</b>（点右上「🔗 复制共享链接」发送）'; }
-  else h.textContent = '把当前页面链接发给同房间的人，各自填写即可自动汇总。';
+  if(!SHARED || !HAS_BACKEND) return;
+  h.innerHTML = '手机/他人打开：<b style="font-family:ui-monospace,Menlo,monospace">'+esc(shareUrl())+'</b>（点右上「🔗 复制共享链接」发送）';
 }
 
 /* 房间切换 / 复制链接 / 手动同步 */
-$('syncRt').hidden = !SHARED;
+$('syncRt').hidden = !SHARED || !HAS_BACKEND;
+$('apiRow').hidden = !(SHARED && !HAS_BACKEND);   // 静态前端(如 github.io)未配后端时，要求填写后端地址
+$('apiInput').value = API_BASE || '';
+$('apiSave').addEventListener('click', ()=>{
+  const v = ($('apiInput').value||'').trim().replace(/\/+$/,'');
+  if(!/^https?:\/\//.test(v)){ toast('请填完整地址，如 https://xxx.pythonanywhere.com','warn'); return; }
+  try{ localStorage.setItem('fts-api', v); }catch(e){}
+  location.reload();
+});
 $('roomInput').value = ROOM;
 function gotoRoom(){ const r=($('roomInput').value||'').trim().slice(0,20); if(!r){ toast('请输入房间名','warn'); return; } if(r!==ROOM) location.href = roomUrl(r); }
 $('roomGo').addEventListener('click', gotoRoom);
@@ -872,11 +898,13 @@ $('copyLink').addEventListener('click', async ()=>{
 $('syncNow').addEventListener('click', ()=> pull(true));
 
 /* 启动 */
-if(SHARED){
+if(SHARED && HAS_BACKEND){
   pollTimer = setInterval(()=> pull(false), 4000);   // 每 4 秒自动拉取他人改动
   pull(true);
   initHostInfo().then(showShareHint);
   toast('多人协作已开启 · 房间 “'+ROOM+'”');
+} else if(SHARED){
+  setSyncUi('busy');                                 // 静态前端：等用户填后端地址
 } else {
   setSyncUi('local');
 }
