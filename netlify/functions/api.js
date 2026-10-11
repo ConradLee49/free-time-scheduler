@@ -98,17 +98,38 @@ function merge(room, payload) {
   return room;
 }
 
+function openStore() {
+  const opts = { name: STORE_NAME };
+  if (process.env.BLOBS_SITE_ID) opts.siteID = process.env.BLOBS_SITE_ID;
+  if (process.env.BLOBS_TOKEN) opts.token = process.env.BLOBS_TOKEN;
+  return getStore(opts);
+}
+
 exports.handler = async (event) => {
   const method = (event.httpMethod || 'GET').toUpperCase();
   if (method === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
 
   const path = (event.path || '') + ' ' + (event.rawUrl || '');
   if (/\/hostinfo\/?(?:[?#\s]|$)/.test(path)) return json(200, { ok: true, lan: '' });
+  // 诊断（只回显变量名，不泄露值）：/api/state?debug=env
+  if ((event.queryStringParameters || {}).debug) {
+    return json(200, {
+      ok: true,
+      hasBlobsContext: !!process.env.NETLIFY_BLOBS_CONTEXT,
+      hasSiteId: !!process.env.NETLIFY_SITE_ID,
+      hasBlobsToken: !!process.env.NETLIFY_BLOBS_TOKEN,
+      hasApiToken: !!process.env.NETLIFY_API_TOKEN,
+      hasCustomSiteId: !!process.env.BLOBS_SITE_ID,
+      hasCustomToken: !!process.env.BLOBS_TOKEN,
+      node: process.version,
+      envKeys: Object.keys(process.env).filter((k) => /BLOBS|NETLIFY|SITE|TOKEN/i.test(k)).sort(),
+    });
+  }
 
   const qs = event.queryStringParameters || {};
   const room = cleanRoom(qs.room);
   const key = 'room:' + room;
-  const store = getStore(STORE_NAME);
+  const store = openStore();
 
   try {
     if (method === 'GET') {
