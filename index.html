@@ -268,7 +268,7 @@ const ROOM   = (new URLSearchParams(location.search).get('room')||'').trim().sli
    次之：浏览器记住过的后端地址（localStorage，用于 github.io 等静态前端）
    否则：同源（用 PythonAnywhere/server.py 自己托管时无需配置） */
 const STATIC_HOST = location.protocol === 'file:' ||
-  /(^|\.)(github\.io|pages\.dev|netlify\.app|vercel\.app|surge\.sh)$/i.test(location.hostname);
+  /(^|\.)(github\.io|gitlab\.io|surge\.sh)$/i.test(location.hostname);
 const QS_API = (new URLSearchParams(location.search).get('api')||'').trim().replace(/\/+$/,'');
 let API_BASE = '';
 if(QS_API){ API_BASE = QS_API; try{ localStorage.setItem('fts-api', QS_API); }catch(e){} }

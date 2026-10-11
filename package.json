@@ -1,0 +1,9 @@
+{
+  "name": "free-time-scheduler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "空闲时间协调器：Netlify 全 Serverless 部署（静态前端 + Function + Blobs）",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.4"
+  }
+}

@@ -4,3 +4,7 @@ server_data.json.tmp
 __pycache__/
 *.pyc
 .DS_Store
+# Netlify
+node_modules/
+.netlify/
+dist/

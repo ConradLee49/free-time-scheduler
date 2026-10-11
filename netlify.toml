@@ -1,0 +1,19 @@
+# Netlify 配置：静态前端 + Function（/api/*）+ Blobs 存储
+# 部署：npx netlify-cli deploy --prod   （首次需 npx netlify-cli login）
+# 或：Netlify 网页端 "Add new site → Import from Git"，选本仓库即可（自动读此文件）
+
+[build]
+  # 只发布页面本身，避免把 server_data.json 等文件暴露出去
+  command = "mkdir -p dist && cp index.html dist/index.html"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# /api/* -> Netlify Function（保持同源，前端无需配置后端地址）
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
