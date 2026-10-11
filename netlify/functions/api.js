@@ -113,22 +113,6 @@ exports.handler = async (event) => {
 
   const path = (event.path || '') + ' ' + (event.rawUrl || '');
   if (/\/hostinfo\/?(?:[?#\s]|$)/.test(path)) return json(200, { ok: true, lan: '' });
-  // 诊断（只回显变量名，不泄露值）：/api/state?debug=env
-  if ((event.queryStringParameters || {}).debug) {
-    return json(200, {
-      ok: true,
-      hasBlobsContext: !!process.env.NETLIFY_BLOBS_CONTEXT,
-      hasSiteId: !!process.env.NETLIFY_SITE_ID,
-      hasBlobsToken: !!process.env.NETLIFY_BLOBS_TOKEN,
-      hasApiToken: !!process.env.NETLIFY_API_TOKEN,
-      hasCustomSiteId: !!process.env.BLOBS_SITE_ID,
-      hasCustomToken: !!process.env.BLOBS_TOKEN,
-      siteIdUsed: (process.env.BLOBS_SITE_ID || process.env.SITE_ID || process.env.NETLIFY_SITE_ID || '').trim(),
-      tokenLen: (process.env.BLOBS_TOKEN || process.env.NETLIFY_BLOBS_TOKEN || '').trim().length,
-      node: process.version,
-      envKeys: Object.keys(process.env).filter((k) => /BLOBS|NETLIFY|SITE|TOKEN/i.test(k)).sort(),
-    });
-  }
 
   const qs = event.queryStringParameters || {};
   const room = cleanRoom(qs.room);

@@ -31,6 +31,17 @@ python3 server.py            # 默认端口 8765；也可 python3 server.py 8080
 
 注意：`server.py` 运行期间 `server_data.json` 保存所有房间数据（重启不丢），请勿提交/上传该文件。
 
+## 部署到 Netlify（全 Serverless，推荐）
+
+前端静态页 + Netlify Function（`/api/*`）+ **Netlify Blobs** 存数据——**不需要任何常开服务器、不休眠**，`netlify.app` 域名同源，前端无需配置后端地址。
+
+1. 推送到 GitHub（本仓库已含 `netlify.toml`、`netlify/functions/api.js`、`package.json`）。
+2. Netlify → **Add new site → Import an existing project** → 选该 GitHub 仓库 → 部署（自动读取 `netlify.toml`：构建命令复制 `index.html` 到 `dist/`，发布 `dist`，函数目录 `netlify/functions`）。
+3. 打开 `https://<站点名>.netlify.app/?room=小组名` 即可使用；以后 `git push` 会自动重新部署。
+
+> 关于 Blobs 凭据：函数运行时通常会自动获得 Blobs 上下文；若报 `MissingBlobsEnvironmentError`，请在站点环境变量里加一个
+> **`BLOBS_TOKEN`**（Netlify 个人访问令牌，建议标记为 secret）——函数会用运行时的 `SITE_ID` 作为 siteID，配合该令牌访问 Blobs。
+
 ## 部署到公网（Render，免费）
 
 校园网/公司网常有终端隔离，局域网直连不可用；异地/不同网络也用不了局域网地址。最省事的免费方案是把 `server.py` 部署到 Render，得到固定 https 地址，任何网络都能打开。
