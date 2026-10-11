@@ -123,6 +123,8 @@ exports.handler = async (event) => {
       hasApiToken: !!process.env.NETLIFY_API_TOKEN,
       hasCustomSiteId: !!process.env.BLOBS_SITE_ID,
       hasCustomToken: !!process.env.BLOBS_TOKEN,
+      siteIdUsed: (process.env.BLOBS_SITE_ID || process.env.SITE_ID || process.env.NETLIFY_SITE_ID || '').trim(),
+      tokenLen: (process.env.BLOBS_TOKEN || process.env.NETLIFY_BLOBS_TOKEN || '').trim().length,
       node: process.version,
       envKeys: Object.keys(process.env).filter((k) => /BLOBS|NETLIFY|SITE|TOKEN/i.test(k)).sort(),
     });
