@@ -549,7 +549,7 @@ function renderModeMeta(){
   const pt=$('panelTitle'), ps=$('panelSub');
   if(MODE==='edit'){
     pt.innerHTML = a ? '✏️ 填写 <span>'+esc(a.name)+'</span> 的空闲时间' : '✏️ 填写空闲时间';
-    ps.textContent = a ? '点击格子标记/取消该小时；长按后拖动可连续选择多段。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
+    ps.textContent = a ? '点击格子标记/取消该小时；长按后拖动可连续选择多段（拖到边缘会自动滚动）。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
     $('pairPick').hidden = true;
   } else if(MODE==='all'){
     pt.innerHTML = '👥 全员交集 <span>'+cb.length+' 段</span>';
@@ -753,16 +753,69 @@ function startDrag(){
   press.paint = !isSet(press.d, press.h);  // 起点取反：空→标记；已标→取消
   applyPaint(press.d, press.h);
   document.body.classList.add('dragging-select');
+  startAutoScroll();
 }
+/* 坐标 → 格子：先精确命中；若落在左侧“时间”标签列或格子边缘缝隙，
+   则按行列几何就近吸附（手机上拖到左边缘也能继续选，不会断） */
+function cellFromPoint(x,y){
+  const el = document.elementFromPoint(x,y);
+  const hit = el && el.closest ? el.closest('.slot.clickable') : null;
+  if(hit) return hit;
+  const first = document.querySelector('#grid .slot.clickable[data-d="0"][data-h="'+HOURS[0]+'"]');
+  const lastC = document.querySelector('#grid .slot.clickable[data-d="6"][data-h="'+HOURS[0]+'"]');
+  const lastR = document.querySelector('#grid .slot.clickable[data-d="0"][data-h="'+HOURS[HOURS.length-1]+'"]');
+  if(!first || !lastC || !lastR) return null;
+  const b0 = first.getBoundingClientRect(), bC = lastC.getBoundingClientRect(), bR = lastR.getBoundingClientRect();
+  const cw = (bC.left - b0.left)/6, ch = (bR.top - b0.top)/(HOURS.length-1);
+  if(!(cw > 0) || !(ch > 0)) return null;
+  const HEAD = 46, SX = cw*0.9, SY = ch*0.9;
+  if(x < b0.left - SX || x > bC.right + SX) return null;
+  if(y < b0.top - HEAD - SY || y > bR.bottom + SY) return null;
+  const d = Math.min(6, Math.max(0, Math.floor((x - b0.left)/cw)));
+  const i = Math.min(HOURS.length-1, Math.max(0, Math.floor((y - b0.top)/ch)));
+  return document.querySelector('#grid .slot.clickable[data-d="'+d+'"][data-h="'+HOURS[i]+'"]');
+}
+/* 拖动到边缘时自动滚动：手机屏幕比表格(860px)窄，靠它能拖到远处的日期/时段 */
+let autoRaf = 0; const autoVec = {dx:0, dy:0};
+function updateAutoVec(x,y){
+  const wrap = document.querySelector('.tt-grid-wrap');
+  if(!wrap){ autoVec.dx = autoVec.dy = 0; return; }
+  const r = wrap.getBoundingClientRect(), M = 46, S = 12;
+  const left = Math.max(r.left, 0), right = Math.min(r.right, window.innerWidth);      // 用“表格可见区”
+  const top  = Math.max(r.top, 0),  bottom = Math.min(r.bottom, window.innerHeight);   // 与视口的交集判断边缘
+  autoVec.dx = (right > left) ? (x < left+M ? -S : (x > right-M ? S : 0)) : 0;
+  autoVec.dy = (bottom > top) ? (y < top+M  ? -S : (y > bottom-M ? S : 0)) : 0;
+}
+function startAutoScroll(){
+  if(autoRaf) return;
+  const step = ()=>{
+    if(!dragActive){ autoRaf = 0; return; }
+    const wrap = document.querySelector('.tt-grid-wrap');
+    let moved = false;
+    if(wrap){
+      if(autoVec.dx){ const b = wrap.scrollLeft; wrap.scrollLeft += autoVec.dx; if(wrap.scrollLeft !== b) moved = true; }
+      if(autoVec.dy){
+        if(wrap.scrollHeight > wrap.clientHeight + 2){ const b = wrap.scrollTop; wrap.scrollTop += autoVec.dy; if(wrap.scrollTop !== b) moved = true; }
+        else { const b = window.scrollY; window.scrollTo({top:b + autoVec.dy, behavior:'instant'}); if(window.scrollY !== b) moved = true; }
+      }
+    }
+    if(moved && press) paintAt(press.lx, press.ly);   // 内容动了就重新涂抹，手指不用动
+    autoRaf = requestAnimationFrame(step);
+  };
+  autoRaf = requestAnimationFrame(step);
+}
+function stopAutoScroll(){ if(autoRaf){ cancelAnimationFrame(autoRaf); autoRaf = 0; } autoVec.dx = autoVec.dy = 0; }
 /* 按屏幕坐标涂抹一格（触摸拖动与 pointer 拖动共用） */
 function paintAt(x,y){
-  const el = document.elementFromPoint(x,y);
-  const cell = el && el.closest ? el.closest('.slot.clickable') : null;
+  if(press){ press.lx = x; press.ly = y; }
+  if(dragActive) updateAutoVec(x,y);
+  const cell = cellFromPoint(x,y);
   if(cell) applyPaint(+cell.dataset.d, +cell.dataset.h);
 }
 function endDrag(){
   const was = dragActive;
   dragActive = false;
+  stopAutoScroll();
   document.body.classList.remove('dragging-select');
   if(was){ renderStats(); renderPeople(); renderModeMeta(); renderLegend(); renderBannerAndSummary(); }
 }
@@ -771,11 +824,12 @@ function cancelPress(){ if(press){ clearTimeout(press.timer); press = null; } en
 $('grid').addEventListener('pointerdown', e=>{
   if(MODE!=='edit') return;
   if(e.pointerType==='mouse' && e.button!==0) return;
-  const cell = e.target.closest && e.target.closest('.slot.clickable');
+  const cell = cellFromPoint(e.clientX, e.clientY);   // 左侧“时间”标签列也会就近吸附成格子
   if(!cell || !active()) return;
   cancelPress();
   const touch = e.pointerType !== 'mouse';
   press = { pid:e.pointerId, d:+cell.dataset.d, h:+cell.dataset.h, x:e.clientX, y:e.clientY,
+            lx:e.clientX, ly:e.clientY,
             t0:performance.now(), tol:touch?MOVE_TOL_TOUCH:MOVE_TOL_MOUSE, touch,
             dragging:false, paint:false, timer:setTimeout(startDrag, LONGPRESS_MS) };
   try{ $('grid').setPointerCapture(e.pointerId); }catch(_){}
