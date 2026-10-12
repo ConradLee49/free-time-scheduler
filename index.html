@@ -549,7 +549,7 @@ function renderModeMeta(){
   const pt=$('panelTitle'), ps=$('panelSub');
   if(MODE==='edit'){
     pt.innerHTML = a ? '✏️ 填写 <span>'+esc(a.name)+'</span> 的空闲时间' : '✏️ 填写空闲时间';
-    ps.textContent = a ? '点击格子标记/取消该小时；长按后拖动可连续选择多段（拖到边缘会自动滚动）。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
+    ps.textContent = a ? '点击格子标记/取消该小时；长按后上下拖动可连续选择同一天的多个小时。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
     $('pairPick').hidden = true;
   } else if(MODE==='all'){
     pt.innerHTML = '👥 全员交集 <span>'+cb.length+' 段</span>';
@@ -776,23 +776,21 @@ function cellFromPoint(x,y){
   const i = Math.min(HOURS.length-1, Math.max(0, Math.floor((y - b0.top)/ch)));
   return document.querySelector('#grid .slot.clickable[data-d="'+d+'"][data-h="'+HOURS[i]+'"]');
 }
-/* 拖动到边缘时自动滚动：手机屏幕比表格(860px)窄，靠它能拖到远处的日期/时段。
+/* 拖动到上下边缘时自动滚动（手机上一屏看不完 08:00–23:00，靠它能不松手拖到 23:00）。
    为避免“手一按在屏幕边缘就自动跑”，要求：已真实拖动过 + 在边缘停留一小会儿 */
 let autoRaf = 0; const autoVec = {dx:0, dy:0, since:0};
 function updateAutoVec(x,y){
   const wrap = document.querySelector('.tt-grid-wrap');
-  if(!wrap || !press){ autoVec.dx = autoVec.dy = 0; autoVec.since = 0; return; }
-  const r = wrap.getBoundingClientRect(), M = 22, S = 10;
-  const left = Math.max(r.left, 0), right = Math.min(r.right, window.innerWidth);      // 用“表格可见区”
-  const top  = Math.max(r.top, 0),  bottom = Math.min(r.bottom, window.innerHeight);   // 与视口的交集判断边缘
-  const inX = (right > left) && (x < left+M || x > right-M);
-  const inY = (bottom > top) && (y < top+M  || y > bottom-M);
-  if((press.moved||0) < 26 || (!inX && !inY)){ autoVec.dx = autoVec.dy = 0; autoVec.since = 0; return; }
+  autoVec.dx = 0;                                     // 拖动只在同一天内进行，不再横向滚动
+  if(!wrap || !press){ autoVec.dy = 0; autoVec.since = 0; return; }
+  const r = wrap.getBoundingClientRect(), M = 26, S = 10;
+  const top = Math.max(r.top, 0), bottom = Math.min(r.bottom, window.innerHeight);   // 表格可见区与视口的交集
+  const inY = (bottom > top) && (y < top+M || y > bottom-M);
+  if((press.moved||0) < 26 || !inY){ autoVec.dy = 0; autoVec.since = 0; return; }
   const now = performance.now();
   if(!autoVec.since) autoVec.since = now;
-  if(now - autoVec.since < 220){ autoVec.dx = autoVec.dy = 0; return; }   // 得在边缘停一下才滚
-  autoVec.dx = inX ? (x < left+M ? -S : S) : 0;
-  autoVec.dy = inY ? (y < top+M  ? -S : S) : 0;
+  if(now - autoVec.since < 220){ autoVec.dy = 0; return; }   // 得在边缘停一下才滚
+  autoVec.dy = y < top+M ? -S : S;
 }
 function startAutoScroll(){
   if(autoRaf) return;
@@ -800,12 +798,9 @@ function startAutoScroll(){
     if(!dragActive){ autoRaf = 0; return; }
     const wrap = document.querySelector('.tt-grid-wrap');
     let moved = false;
-    if(wrap){
-      if(autoVec.dx){ const b = wrap.scrollLeft; wrap.scrollLeft += autoVec.dx; if(wrap.scrollLeft !== b) moved = true; }
-      if(autoVec.dy){
-        if(wrap.scrollHeight > wrap.clientHeight + 2){ const b = wrap.scrollTop; wrap.scrollTop += autoVec.dy; if(wrap.scrollTop !== b) moved = true; }
-        else { const b = window.scrollY; window.scrollTo({top:b + autoVec.dy, behavior:'instant'}); if(window.scrollY !== b) moved = true; }
-      }
+    if(wrap && autoVec.dy){
+      if(wrap.scrollHeight > wrap.clientHeight + 2){ const b = wrap.scrollTop; wrap.scrollTop += autoVec.dy; if(wrap.scrollTop !== b) moved = true; }
+      else { const b = window.scrollY; window.scrollTo({top:b + autoVec.dy, behavior:'instant'}); if(window.scrollY !== b) moved = true; }
     }
     if(moved && press) paintAt(press.lx, press.ly);   // 内容动了就重新涂抹，手指不用动
     autoRaf = requestAnimationFrame(step);
@@ -813,7 +808,7 @@ function startAutoScroll(){
   autoRaf = requestAnimationFrame(step);
 }
 function stopAutoScroll(){ if(autoRaf){ cancelAnimationFrame(autoRaf); autoRaf = 0; } autoVec.dx = autoVec.dy = 0; autoVec.since = 0; }
-/* 按屏幕坐标涂抹一格（触摸拖动与 pointer 拖动共用） */
+/* 按屏幕坐标涂抹：**列锁定为起始的那一天**，只按纵坐标决定选到哪一小时 */
 function paintAt(x,y){
   if(press){
     press.lx = x; press.ly = y;
@@ -821,7 +816,7 @@ function paintAt(x,y){
   }
   if(dragActive) updateAutoVec(x,y);
   const cell = cellFromPoint(x,y);
-  if(cell) applyPaint(+cell.dataset.d, +cell.dataset.h);
+  if(cell && press) applyPaint(press.d, +cell.dataset.h);
 }
 function endDrag(){
   const was = dragActive;
