@@ -87,8 +87,6 @@ body.dragging-select .slot.clickable{cursor:crosshair}
 /* 拖动选择期间彻底接管触摸：禁止页面跟着滚动（松手后自动恢复） */
 body.dragging-select,body.dragging-select .tt-grid-wrap,body.dragging-select #grid,body.dragging-select #grid *{touch-action:none!important;overscroll-behavior:none}
 body.dragging-select #statusStrip::after{content:" · 拖动选择中…";color:var(--blue);font-weight:800}
-body.dragging-select[data-dragmode="del"] #statusStrip::after{content:" · 拖动取消中…";color:#c0392b}
-.slot.pressing{box-shadow:inset 0 0 0 2px var(--blue);z-index:3}
 .slot.clickable:hover{box-shadow:inset 0 0 0 2px #b6c4e6;z-index:2}
 /* 填写者已选（含自己的颜色） */
 .slot.free-active{background:var(--dot);box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
@@ -640,7 +638,6 @@ function renderAll(){ renderStats(); renderPeople(); renderMode(); }
 let lockUntil = 0, lockTimer = null;
 document.addEventListener('pointerdown', ()=>{ lockUntil = performance.now() + 320; }, true);
 function scheduleRender(fn){
-  if(dragActive){ pendingRender = fn; return; }      // 拖动期间先不重绘，松手后再补（避免打断涂抹）
   const wait = lockUntil - performance.now();
   if(wait > 0){ clearTimeout(lockTimer); lockTimer = setTimeout(fn, wait + 25); }
   else fn();
@@ -738,28 +735,7 @@ function toggleSlot(d,h){
    （pointer 用“坐标命中”判断，期间重绘替换节点也不会丢操作） */
 const LONGPRESS_MS = 250, HOLD_LOCK_MS = 120;    // 长按阈值 / 锁滚动起始时间
 const MOVE_TOL_MOUSE = 10, MOVE_TOL_TOUCH = 22;  // 手指会飘，触摸容差放大
-let press = null, dragActive = false, pendingRender = null;
-
-/* ---- 诊断浮层：地址栏加 ?diag=1 打开（手机上排查手势问题用，可关掉不看） ---- */
-const DIAG = /[?&]diag=1/.test(location.search);
-const dg = {down:0, move:0, tmove:0, paint:0, cancel:0, pcancel:0, tstart:0, tend:0, drag:0, mark:'-', why:'-'};
-if(DIAG){
-  const box = document.createElement('div');
-  box.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9999;background:#0f1b33ee;color:#cfe0ff;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px 10px;border-radius:10px;max-width:94vw;white-space:pre-wrap;pointer-events:none';
-  document.body.appendChild(box);
-  setInterval(()=>{
-    box.textContent =
-      'press:'+(press?(press.dragging?'DRAG':(press.paint?'选':'取消')):'no')+'  起:'+dg.mark+'  dragN:'+dg.drag+'\n'+
-      'down:'+dg.down+'  mv:'+dg.move+'  tmv:'+dg.tmove+'  实际改格:'+dg.paint+'\n'+
-      'cancel:'+dg.cancel+'('+dg.why+')  pcancel:'+dg.pcancel+'\n'+
-      'tstart:'+dg.tstart+'  tend:'+dg.tend+(press?('  held:'+Math.round(performance.now()-press.t0)+'ms'):'');
-  }, 150);
-}
-function markPressed(el){                                   // 按下就给出可见反馈（证明长按被识别）
-  document.querySelectorAll('.slot.pressing').forEach(x=>x.classList.remove('pressing'));
-  if(el) el.classList.add('pressing');
-}
-function clearPressed(){ document.querySelectorAll('.slot.pressing').forEach(x=>x.classList.remove('pressing')); }
+let press = null, dragActive = false;
 function isSet(d,h){ const a=active(); return !!(a && S.data[a.id] && S.data[a.id][keyOf(d,h)]); }
 function applyPaint(d,h){                 // 拖动时按“起点取反”的状态批量设置
   const a = active(); if(!a || !press) return;
@@ -768,15 +744,13 @@ function applyPaint(d,h){                 // 拖动时按“起点取反”的�
   const cur = !!obj[k];
   if(cur === press.paint) return;          // 已是目标状态，跳过
   if(press.paint) obj[k] = true; else delete obj[k];
-  dg.paint++;
   changed([a.id]); persist();
   paintCell(d,h);
 }
 function startDrag(){
   if(!press || press.dragging) return;
-  press.dragging = true; dragActive = true; dg.drag++;
+  press.dragging = true; dragActive = true;
   press.paint = !isSet(press.d, press.h);  // 起点取反：空→标记；已标→取消
-  document.body.dataset.dragmode = press.paint ? 'add' : 'del';
   applyPaint(press.d, press.h);
   document.body.classList.add('dragging-select');
 }
@@ -790,39 +764,30 @@ function endDrag(){
   const was = dragActive;
   dragActive = false;
   document.body.classList.remove('dragging-select');
-  delete document.body.dataset.dragmode;
   if(was){ renderStats(); renderPeople(); renderModeMeta(); renderLegend(); renderBannerAndSummary(); }
-  if(pendingRender){ const fn = pendingRender; pendingRender = null; fn(); }   // 拖动期间攒下的整表重绘，现在补上
 }
-function cancelPress(why){
-  if(press){ clearTimeout(press.timer); press = null; dg.cancel++; if(why) dg.why = why; }
-  clearPressed();
-  endDrag();
-}
+function cancelPress(){ if(press){ clearTimeout(press.timer); press = null; } endDrag(); }
 
 $('grid').addEventListener('pointerdown', e=>{
   if(MODE!=='edit') return;
   if(e.pointerType==='mouse' && e.button!==0) return;
   const cell = e.target.closest && e.target.closest('.slot.clickable');
   if(!cell || !active()) return;
-  cancelPress('new-press');
-  dg.down++; dg.mark = cell.dataset.d+'-'+cell.dataset.h;
+  cancelPress();
   const touch = e.pointerType !== 'mouse';
   press = { pid:e.pointerId, d:+cell.dataset.d, h:+cell.dataset.h, x:e.clientX, y:e.clientY,
             t0:performance.now(), tol:touch?MOVE_TOL_TOUCH:MOVE_TOL_MOUSE, touch,
             dragging:false, paint:false, timer:setTimeout(startDrag, LONGPRESS_MS) };
-  markPressed(cell);                       // 立刻给出“按到了”的视觉反馈
   try{ $('grid').setPointerCapture(e.pointerId); }catch(_){}
 });
 $('grid').addEventListener('pointermove', e=>{
   if(!press || e.pointerId!==press.pid) return;
-  dg.move++;
   if(!press.dragging){
     const moved = Math.hypot(e.clientX-press.x, e.clientY-press.y);
     const held  = performance.now() - press.t0;
     if(moved > press.tol){
       if(held >= LONGPRESS_MS && moved <= press.tol*2) startDrag();  // 手指略飘但已按住 → 进入选择
-      else cancelPress('move-far '+Math.round(moved)+'px');          // 否则视为滚动
+      else cancelPress();                                           // 否则视为滚动
       if(!press || !press.dragging) return;
     } else if(held >= LONGPRESS_MS) startDrag();                    // 定时器被延迟时的兜底
     if(!press || !press.dragging) return;
@@ -834,44 +799,32 @@ document.addEventListener('pointerup', e=>{
   const g = press;
   clearTimeout(g.timer);
   const dragging = g.dragging;
-  press = null; clearPressed();
+  press = null;
   endDrag();
   if(dragging) return;                                              // 拖动结束，不再当单击
-  const tapTol = g.touch ? 16 : 12;
-  if(Math.hypot(e.clientX-g.x, e.clientY-g.y) > tapTol) return;      // 位移过大=滚动，不算点击
+  if(Math.hypot(e.clientX-g.x, e.clientY-g.y) > 12) return;         // 位移过大=滚动，不算点击
   const top = document.elementFromPoint(e.clientX, e.clientY);
   const cell = top && top.closest ? top.closest('.slot.clickable') : null;
   if(cell && +cell.dataset.d===g.d && +cell.dataset.h===g.h) toggleSlot(g.d, g.h);
 });
-document.addEventListener('pointercancel', e=>{
-  dg.pcancel++;
-  if(!dragActive) cancelPress('pointercancel');   // 拖动中忽略：改用 touch 通道继续
-});
-/* 长按拖动时阻止页面滚动（touchmove 需非 passive 才能 preventDefault） */
-document.addEventListener('touchmove', e=>{ if(dragActive) e.preventDefault(); }, { passive:false });
-document.addEventListener('touchstart', ()=>{ dg.tstart++; }, { passive:true, capture:true });
-document.addEventListener('touchend', ()=>{ dg.tend++; if(press && press.dragging){ press = null; clearPressed(); endDrag(); } });
-document.addEventListener('touchcancel', ()=>cancelPress('touchcancel'));
-/* 屏蔽长按弹出的系统菜单/文字选择，避免打断拖动 */
-document.addEventListener('contextmenu', e=>{ if(press || dragActive) e.preventDefault(); });
+document.addEventListener('pointercancel', e=>{ if(!dragActive) cancelPress(); });   // 拖动中忽略（改用 touch 通道继续）
 /* 触摸通道：手机上一旦浏览器想拿手势去滚动，pointer 事件会被取消，因此这里
    (1) 按住一小会儿（HOLD_LOCK_MS）后主动 preventDefault 锁住滚动，给长按一个机会；
    (2) 拖动中持续用触摸坐标涂抹，即使 pointer 已失效也能连续选择。
    快速滑动（未按住就划走）不干预，页面照常滚动。 */
 $('grid').addEventListener('touchmove', e=>{
   if(!press || !e.touches || !e.touches.length) return;
-  dg.tmove++;
   const t = e.touches[0];
   const moved = Math.hypot(t.clientX-press.x, t.clientY-press.y);
   const held  = performance.now() - press.t0;
   if(press.dragging){ e.preventDefault(); paintAt(t.clientX, t.clientY); return; }
   if(held >= HOLD_LOCK_MS){
     e.preventDefault();                                        // 锁住滚动，等长按兑现
-    if(moved > press.tol*2) cancelPress('touchmove-far '+Math.round(moved)+'px');   // 大幅滑动 → 判定为滚页，放行
+    if(moved > press.tol*2) cancelPress();                     // 大幅滑动 → 判定为滚页，放行
     else if(held >= LONGPRESS_MS){ startDrag(); paintAt(t.clientX, t.clientY); }
     return;
   }
-  if(moved > press.tol) cancelPress('touchmove '+Math.round(moved)+'px');
+  if(moved > press.tol) cancelPress();
 }, { passive:false, capture:true });
 document.addEventListener('touchend', ()=>{ if(press && press.dragging){ press = null; endDrag(); } });
 document.addEventListener('touchcancel', cancelPress);
