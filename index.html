@@ -82,6 +82,9 @@ button,input,select{font:inherit}.wrap{max-width:1400px;margin:auto;padding:22px
 body[data-wkend="1"] .slot.weekend{background:repeating-linear-gradient(to bottom,transparent 0 41px,#f7f1ea 41px 42px)}
 /* 可点击（填写模式） */
 .slot.clickable{cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
+/* 长按拖动连续选择 */
+body.dragging-select .slot.clickable{cursor:crosshair}
+body.dragging-select #statusStrip::after{content:" · 拖动选择中…";color:var(--blue);font-weight:800}
 .slot.clickable:hover{box-shadow:inset 0 0 0 2px #b6c4e6;z-index:2}
 /* 填写者已选（含自己的颜色） */
 .slot.free-active{background:var(--dot);box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
@@ -544,7 +547,7 @@ function renderModeMeta(){
   const pt=$('panelTitle'), ps=$('panelSub');
   if(MODE==='edit'){
     pt.innerHTML = a ? '✏️ 填写 <span>'+esc(a.name)+'</span> 的空闲时间' : '✏️ 填写空闲时间';
-    ps.textContent = a ? '点击“空”格子 = 标记为这一小时有空；再点一次取消。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
+    ps.textContent = a ? '点击格子标记/取消该小时；长按后拖动可连续选择多段。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
     $('pairPick').hidden = true;
   } else if(MODE==='all'){
     pt.innerHTML = '👥 全员交集 <span>'+cb.length+' 段</span>';
@@ -726,26 +729,72 @@ function toggleSlot(d,h){
   renderLegend();
   renderBannerAndSummary();
 }
-/* 用 pointer 事件代替 click：
-   click 要求“按下/抬起”在同一 DOM 节点，期间任何重绘替换节点都会丢点击；
-   pointer 用“坐标命中”判断，即使格子被重建也能稳定切换。 */
-let pdrag = null;
+/* 指针交互：轻点=切换单格；长按(~0.25s)后拖动=连续选择多段
+   （pointer 用“坐标命中”判断，期间重绘替换节点也不会丢操作） */
+const LONGPRESS_MS = 250, MOVE_TOL = 10;
+let press = null, dragActive = false;
+function isSet(d,h){ const a=active(); return !!(a && S.data[a.id] && S.data[a.id][keyOf(d,h)]); }
+function applyPaint(d,h){                 // 拖动时按“起点取反”的状态批量设置
+  const a = active(); if(!a || !press) return;
+  const k = keyOf(d,h);
+  const obj = S.data[a.id] || (S.data[a.id]={});
+  const cur = !!obj[k];
+  if(cur === press.paint) return;          // 已是目标状态，跳过
+  if(press.paint) obj[k] = true; else delete obj[k];
+  changed([a.id]); persist();
+  paintCell(d,h);
+}
+function startDrag(){
+  if(!press || press.dragging) return;
+  press.dragging = true; dragActive = true;
+  press.paint = !isSet(press.d, press.h);  // 起点取反：空→标记；已标→取消
+  applyPaint(press.d, press.h);
+  document.body.classList.add('dragging-select');
+}
+function endDrag(){
+  const was = dragActive;
+  dragActive = false;
+  document.body.classList.remove('dragging-select');
+  if(was){ renderStats(); renderPeople(); renderModeMeta(); renderLegend(); renderBannerAndSummary(); }
+}
+function cancelPress(){ if(press){ clearTimeout(press.timer); press = null; } endDrag(); }
+
 $('grid').addEventListener('pointerdown', e=>{
   if(MODE!=='edit') return;
   if(e.pointerType==='mouse' && e.button!==0) return;
   const cell = e.target.closest && e.target.closest('.slot.clickable');
   if(!cell || !active()) return;
-  pdrag = { pid:e.pointerId, d:+cell.dataset.d, h:+cell.dataset.h, x:e.clientX, y:e.clientY };
+  cancelPress();
+  press = { pid:e.pointerId, d:+cell.dataset.d, h:+cell.dataset.h, x:e.clientX, y:e.clientY,
+            dragging:false, paint:false, timer:setTimeout(startDrag, LONGPRESS_MS) };
+  try{ $('grid').setPointerCapture(e.pointerId); }catch(_){}
+});
+$('grid').addEventListener('pointermove', e=>{
+  if(!press || e.pointerId!==press.pid) return;
+  if(!press.dragging){
+    if(Math.hypot(e.clientX-press.x, e.clientY-press.y) > MOVE_TOL) cancelPress();  // 长按前就动 → 视为滚动
+    return;
+  }
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = el && el.closest ? el.closest('.slot.clickable') : null;
+  if(cell) applyPaint(+cell.dataset.d, +cell.dataset.h);
 });
 document.addEventListener('pointerup', e=>{
-  if(!pdrag || e.pointerId!==pdrag.pid) return;
-  const g = pdrag; pdrag = null;
-  if(Math.hypot(e.clientX-g.x, e.clientY-g.y) > 12) return;   // 位移过大=滚动/拖拽，不算点击
+  if(!press || e.pointerId!==press.pid) return;
+  const g = press;
+  clearTimeout(g.timer);
+  const dragging = g.dragging;
+  press = null;
+  endDrag();
+  if(dragging) return;                                              // 拖动结束，不再当单击
+  if(Math.hypot(e.clientX-g.x, e.clientY-g.y) > 12) return;         // 位移过大=滚动，不算点击
   const top = document.elementFromPoint(e.clientX, e.clientY);
   const cell = top && top.closest ? top.closest('.slot.clickable') : null;
   if(cell && +cell.dataset.d===g.d && +cell.dataset.h===g.h) toggleSlot(g.d, g.h);
 });
-document.addEventListener('pointercancel', ()=>{ pdrag = null; });
+document.addEventListener('pointercancel', cancelPress);
+/* 长按拖动时阻止页面滚动（touchmove 需非 passive 才能 preventDefault） */
+document.addEventListener('touchmove', e=>{ if(dragActive) e.preventDefault(); }, { passive:false });
 ['pairA','pairB'].forEach(id=>{
   $(id).addEventListener('change', ()=>{ if(MODE==='pair') renderMode(); });
 });
