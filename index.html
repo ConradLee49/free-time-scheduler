@@ -101,6 +101,13 @@ body.dragging-select #statusStrip::after{content:" · 拖动选择中…";color:
 .slot.both b{color:#fff;font-size:15px}
 .slot .lbl{position:absolute;left:4px;top:2px;font-size:9px;font-weight:800;opacity:.75;color:#fff}
 /* ---------- 图例 / 摘要 ---------- */
+.slot.range-anchor{box-shadow:inset 0 0 0 3px var(--blue)}
+.slot.range-anchor::before{content:"起";position:absolute;top:2px;left:5px;font-size:9px;font-weight:800;color:var(--blue)}
+.grid-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 9px}
+.grid-tools[hidden]{display:none}
+.grid-tools .mini{border:1px solid var(--line);background:#fff;color:#3d4c68;border-radius:10px;padding:7px 12px;cursor:pointer;font-weight:700;white-space:nowrap}
+.grid-tools .mini.on{background:var(--blueSoft);border-color:#b9c8f0;color:#2a4b9b}
+.grid-tools .tip{font-size:11px;color:#8b96a8;line-height:1.5}
 .legend{display:flex;gap:16px;margin-top:11px;color:#7c889b;font-size:11.5px;flex-wrap:wrap;align-items:center}
 .lchip{display:inline-flex;align-items:center;gap:6px}
 .lchip i{width:20px;height:12px;border-radius:4px;display:inline-block}
@@ -225,6 +232,10 @@ body.dragging-select #statusStrip::after{content:" · 拖动选择中…";color:
       </div>
     </div>
 
+    <div class="grid-tools" id="gridTools">
+      <button id="rangeBtn" class="mini" type="button">▭ 区间选择：关</button>
+      <span class="tip" id="rangeTip">手机不好长按？开“区间选择”：点起点 → 点终点，一次选中同一天的连续小时。</span>
+    </div>
     <div class="tt-grid-wrap">
       <div class="tg" id="grid"></div>
     </div>
@@ -447,6 +458,7 @@ function cellHTML(d,h){
     }
   }
   if(clickable) cls.push('clickable');
+  if(RANGE && anchor && anchor.d===d && anchor.h===h) cls.push('range-anchor');   // 区间起点标记
   const ds = S.data;
   // 填写模式下让格子带上 active 颜色变量
   let style='';
@@ -511,6 +523,9 @@ function bannerHTML(txt, kind){ return '<div class="banner '+kind+'">'+txt+'</di
 function renderModeMeta(){
   // 段按钮 / 状态条 / 标题等（不重绘整张课表，供轻量刷新用）
   document.querySelectorAll('#viewSeg button').forEach(b=> b.classList.toggle('active', b.dataset.v===MODE));
+  const rb = $('rangeBtn');
+  if(rb){ rb.classList.toggle('on', RANGE); rb.textContent = RANGE ? '▭ 区间选择：开' : '▭ 区间选择：关'; }
+  const gt = $('gridTools'); if(gt) gt.hidden = (MODE!=='edit');
   const a = active();
 
   // 两人模式：先填充/保持选择（其后再读 pairA/pairB 均有效）
@@ -549,7 +564,13 @@ function renderModeMeta(){
   const pt=$('panelTitle'), ps=$('panelSub');
   if(MODE==='edit'){
     pt.innerHTML = a ? '✏️ 填写 <span>'+esc(a.name)+'</span> 的空闲时间' : '✏️ 填写空闲时间';
-    ps.textContent = a ? '点击格子标记/取消该小时；长按后上下拖动可连续选择同一天的多个小时。不同颜色代表不同填写者。' : '先从上方选择一位填写者。';
+    if(RANGE){
+      ps.textContent = anchor
+        ? '区间选择：起点 '+DAYS[anchor.d]+' '+HOUR_LABEL(anchor.h)+' → 请再点同一天的终点（点同一天以外会重新设起点）。'
+        : '区间选择：请点“起点”，再点“终点”，一次选中同一天的连续小时。';
+    } else {
+      ps.textContent = a ? '点击格子标记/取消该小时；也可以长按后上下拖动连续选择同一天的多个小时。' : '先从上方选择一位填写者。';
+    }
     $('pairPick').hidden = true;
   } else if(MODE==='all'){
     pt.innerHTML = '👥 全员交集 <span>'+cb.length+' 段</span>';
@@ -713,12 +734,48 @@ async function replaceShared(pp, dd){  // 导入 = 整体替换房间
 /* ================= 事件 ================= */
 $('viewSeg').addEventListener('click', e=>{
   const b = e.target.closest('button'); if(!b) return;
-  MODE = b.dataset.v; syncSeg(); renderAll();
+  MODE = b.dataset.v;
+  anchor = null;
+  if(MODE!=='edit') RANGE = false;      // 离开填写模式时自动退出区间选择
+  syncSeg(); renderAll();
 });
+$('rangeBtn').addEventListener('click', ()=>{
+  RANGE = !RANGE; anchor = null;
+  if(RANGE){
+    toast('区间选择已开：点起点 → 点终点（同一天）');
+    if(MODE!=='edit'){ MODE='edit'; syncSeg(); }
+  } else toast('区间选择已关');
+  renderAll();
+});
+/* 区间选择：不依赖长按手势，点起点 → 点终点（同一天连续小时） */
+function setRange(d,h1,h2,val){
+  const a = active(); if(!a) return 0;
+  const obj = S.data[a.id] || (S.data[a.id]={});
+  const lo = Math.min(h1,h2), hi = Math.max(h1,h2);
+  let n = 0;
+  for(let h=lo; h<=hi; h++){ const k = keyOf(d,h);
+    if(val){ if(!obj[k]){ obj[k]=true; n++; } } else if(obj[k]){ delete obj[k]; n++; }
+  }
+  changed([a.id]); persist();
+  for(let h=lo; h<=hi; h++) paintCell(d,h);
+  renderStats(); renderPeople(); renderModeMeta(); renderLegend(); renderBannerAndSummary();
+  return n;
+}
+function rangeTap(d,h){
+  if(!anchor){ anchor = {d:d,h:h}; toast('已设起点：'+DAYS[d]+' '+HOUR_LABEL(h)+'，再点同一天的终点'); renderAll(); return; }
+  if(anchor.d !== d){ anchor = {d:d,h:h}; toast('区间需在同一天，已把起点改到 '+DAYS[d]+' '+HOUR_LABEL(h)); renderAll(); return; }
+  const val = !isSet(anchor.d, anchor.h);      // 以起点当前状态取反（空→全选，已选→全取消）
+  const n = setRange(d, anchor.h, h, val);
+  const lo = Math.min(anchor.h,h), hi = Math.max(anchor.h,h);
+  toast('已'+(val?'选中':'取消')+' '+DAYS[d]+' '+HOUR_LABEL(lo)+'–'+HOUR_LABEL(hi+1)+'（'+n+' 小时）');
+  anchor = null;
+  renderAll();
+}
 /* 提交一次格子切换（填写用） */
 function toggleSlot(d,h){
   const a = active();
   if(!a){ toast('请先点击上方填写者头像设为“正在填写”','warn'); return; }
+  if(RANGE && MODE==='edit'){ rangeTap(d,h); return; }
   const k = keyOf(d,h);
   const obj = S.data[a.id] || (S.data[a.id]={});
   if(obj[k]) delete obj[k]; else obj[k] = true;
@@ -734,9 +791,9 @@ function toggleSlot(d,h){
 /* 指针交互：轻点=切换单格；长按(~0.25s)后拖动=连续选择多段
    （pointer 用“坐标命中”判断，期间重绘替换节点也不会丢操作） */
 const LONGPRESS_MS = 250, HOLD_LOCK_MS = 120;    // 长按阈值 / 锁滚动起始时间
-const SLOP_LOCK = 16;                            // 起手位移小于此值就先锁住滚动（把长按机会抢回来）
 const MOVE_TOL_MOUSE = 10, MOVE_TOL_TOUCH = 22;  // 手指会飘，触摸容差放大
 let press = null, dragActive = false;
+let RANGE = false, anchor = null;                // 区间选择模式：点起点 → 点终点（不依赖长按手势）
 function isSet(d,h){ const a=active(); return !!(a && S.data[a.id] && S.data[a.id][keyOf(d,h)]); }
 function applyPaint(d,h){                 // 拖动时按“起点取反”的状态批量设置
   const a = active(); if(!a || !press) return;
@@ -862,7 +919,8 @@ document.addEventListener('pointerup', e=>{
   press = null;
   endDrag();
   if(dragging) return;                                              // 拖动结束，不再当单击
-  if(Math.hypot(e.clientX-g.x, e.clientY-g.y) > 12) return;         // 位移过大=滚动，不算点击
+  const tapTol = g.touch ? 16 : 12;
+  if(Math.hypot(e.clientX-g.x, e.clientY-g.y) > tapTol) return;     // 位移过大=滚动，不算点击
   const top = document.elementFromPoint(e.clientX, e.clientY);
   const cell = top && top.closest ? top.closest('.slot.clickable') : null;
   if(cell && +cell.dataset.d===g.d && +cell.dataset.h===g.h) toggleSlot(g.d, g.h);
@@ -891,8 +949,7 @@ $('grid').addEventListener('touchmove', e=>{
     else if(held >= LONGPRESS_MS){ startDrag(); paintAt(t.clientX, t.clientY); }
     return;
   }
-  if(moved <= SLOP_LOCK) e.preventDefault();   // 起手就小幅飘移 → 锁住滚动，不让浏览器抢走长按
-  else cancelPress();                          // 明确的快速滑动 → 放行滚动
+  if(moved > press.tol) cancelPress();   // 起手就明显滑动 → 视为滚页（不拦截，避免影响轻点）
 }, { passive:false, capture:true });
 document.addEventListener('touchend', ()=>{ if(press && press.dragging){ press = null; endDrag(); } });
 document.addEventListener('touchcancel', cancelPress);
